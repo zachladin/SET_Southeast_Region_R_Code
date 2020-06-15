@@ -100,7 +100,7 @@ source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMark
 source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/computeTrends.R")
 
 #register Google Maps API key
-register_google(key="AIzaSyDerv2JQubJ_Dg8_RKBZCeyo5zqsM5USw0")
+register_google(key="YOUR_KEY_HERE")
 
 })
 ```

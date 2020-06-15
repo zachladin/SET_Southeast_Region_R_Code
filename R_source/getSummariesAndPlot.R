@@ -1,0 +1,286 @@
+getSummariesAndPlot<-function(dataIn){
+
+  set.data<-dataIn
+
+  ######################################################
+  #get refugeList
+  refugeList<-sort(unique(as.character(set.data$Unit_Code)))
+
+  #get smiUnitList
+  smiUnitList<-sort(unique(as.character(set.data$Site_Name)))
+
+  #get stationList
+  
+  #replace "/" with underscore so not mess up filepath calling
+  set.data$Plot_Name<-gsub("/","_",set.data$Plot_Name)
+  
+  stationList<-sort(unique(as.character(set.data$Plot_Name)))
+
+  ##########################################################
+  #create folder
+  dir.create(paste(getwd(),"Results","Data_Summary_Results",sep="/"))
+
+  ###################################################################
+  #get overall estimates of delta SET (Northeast USFWS Region 5)
+  message("Saving Region-wide estimates and generating plots.")
+
+  summary.all<-summaryDelta(new.dataIn=set.data)
+  summary.all<-data.frame(Unit_Code="All",summary.all)
+  write.csv(summary.all, file=paste(getwd(), "Results","Data_Summary_Results",paste("All", "_delta_SET_year_visit.csv",sep=""),sep="/"),row.names=FALSE)
+
+  #plot overall estimates
+  nStations=length(unique(set.data$Plot_Name))
+
+  SETplot.cummulative<-ggplot(summary.all)+
+    aes(x=year.visit, y=mean,group=1)+
+    geom_smooth(method=lm,fullrange=FALSE, linetype=1, color="white")+
+    geom_errorbar(ymax=summary.all$mean+summary.all$SE, ymin=summary.all$mean-summary.all$SE, width=0.2, size=0.6, color=I("grey30"))+
+    geom_line(color="deepskyblue",linetype=1, size=0.8)+
+    geom_point(size=1.2, color="deepskyblue")+
+    theme(panel.background=element_rect(fill='white',color="black"))+
+    theme(panel.grid.major=element_blank(),panel.grid.minor=element_blank())+
+    theme(axis.line=element_line(color="black"))+
+    theme(panel.background=element_rect(color="black"))+
+    theme(axis.text.x = element_text(angle = 55, hjust = 1.2,vjust=1.2, size=10, color="black"),
+          axis.text.y = element_text(size=12, color="black"),
+          axis.title.x = element_text(size=13, hjust=0.5, vjust=1.9),
+          axis.title.y = element_text(angle = 90, vjust=1.2, size=13))+
+    ylim(c(min(summary.all$mean-summary.all$SE)-2,max(summary.all$mean+summary.all$SE)+2))+
+    #xlim(2002.1,2016.2)
+    labs(x="Year (visits)", y="Elevation change (mm)")
+  #scale_x_discrete(limits=c(2002.1,2016.1),breaks=10, "Year")
+  #scale_y_continuous(limits=c(-5,35),breaks=c(-5,0,5,10,15,20,25,30,35), "Change in elevation (mm)")
+  plot.1<-SETplot.cummulative+
+    ggtitle(paste("Northeast Region"," SET data (n = ", nStations,")",sep=""))
+
+  print(plot.1)
+
+  #save figure
+  myFilepath<-paste(getwd(), "Results","Data_Summary_Results",sep="/")
+  ggsave(plot.1, filename=paste("All", "_delta_SET_year_visit.pdf",sep=""),path=myFilepath, width=9,height=6.5, limitsize=FALSE)
+  ggsave(plot.1, filename=paste("All", "_delta_SET_year_visit.png",sep=""),path=myFilepath, width=8,height=6, limitsize=FALSE)
+
+  ###################################################################
+  #get estimates of delta SET by refuge (Unit_Code)
+  message("Saving delta height (mm) estimates for each Refuge (Unit_Code) and generating plots.")
+  unit.delta.SET<-list()
+  for(i in 1:length(refugeList)){
+
+    new.data<-subset(set.data, Unit_Code==refugeList[i])
+    refugeName<-unique(as.character(new.data$Unit_Code))
+    stateName<-unique(as.character(new.data$State))
+
+    new.summary<-summaryDelta(new.dataIn=new.data)
+    new.summary<-data.frame(State=stateName[1],Unit_Code=refugeName, new.summary)
+
+    dir.create(paste(getwd(), "Results","Data_Summary_Results","Refuge_Summary",sep="/"))
+    dir.create(paste(getwd(), "Results","Data_Summary_Results","Refuge_Summary",refugeName,sep="/"))
+    write.csv(new.summary, file=paste(getwd(), "Results","Data_Summary_Results","Refuge_Summary",refugeName, paste(refugeName, "_delta_SET_year_visit.csv",sep=""),sep="/"),row.names=FALSE)
+
+    unit.delta.SET<-rbind(unit.delta.SET, new.summary)
+
+    #plot refuge-wide estimates
+    nStations=length(unique(new.data$Plot_Name))
+
+     yminLim<-ifelse(refugeName=="PMH",min(new.summary$mean-new.summary$SE)-60,
+                     ifelse(refugeName=="PMH_shallow",min(new.summary$mean-new.summary$SE)-60,
+                     ifelse(min(new.summary$mean-new.summary$SE)<5,
+                     min(new.summary$mean-new.summary$SE)-25,
+                     min(new.summary$mean-new.summary$SE)-30)))
+     #yminLim<-min(new.summary$mean-new.summary$SE)*1.01
+    
+     ymaxLim<-ifelse(max(new.summary$mean+new.summary$SE)==0,
+                     max(new.summary$mean+new.summary$SE)+10,
+                     max(new.summary$mean+new.summary$SE)*1.7)
+    
+    #now plot unit results
+    SETplot.unit<-ggplot(new.summary)+
+      aes(x=year.visit, y=mean,group=1)+
+      geom_smooth(method=lm,fullrange=FALSE, linetype=1, color="white")+
+      geom_errorbar(ymax=new.summary$mean+new.summary$SE, ymin=new.summary$mean-new.summary$SE, width=0.2, size=0.6, color=I("grey30"))+
+      geom_line(color="royalblue2",linetype=1, size=1)+
+      geom_point(size=2, color="royalblue2")+
+      theme(panel.background=element_rect(fill='white',color="black"))+
+      theme(panel.grid.major=element_blank(),panel.grid.minor=element_blank())+
+      theme(axis.line=element_line(color="black"))+
+      theme(panel.background=element_rect(color="black"))+
+      theme(axis.text.x = element_text(angle = 55, hjust = 1.2,vjust=1.2, size=10, color="black"),
+            axis.text.y = element_text(size=12, color="black"),
+            axis.title.x = element_text(size=13, hjust=0.5, vjust=1.9),
+            axis.title.y = element_text(angle = 90, vjust=1.2, size=13))+
+      ylim(c(yminLim, ymaxLim))+
+      #xlim(200.8,2014.2)
+      labs(x="Year (visits)", y="Elevation change (mm)")
+    #scale_x_discrete(limits=c(2009,2014),breaks=c(2009,2010,2011,2012,2013,2014,2015), "Year")+
+    #scale_y_continuous(limits=c(-5,35),breaks=c(-5,0,5,10,15,20,25,30,35), "Change in elevation (mm)")
+    plot.4<-SETplot.unit+
+      ggtitle(paste(refugeName," SET data (n = ", nStations,")",sep=""))
+
+    print(plot.4)
+
+    #save figure
+    myFilepath<-paste(getwd(), "Results","Data_Summary_Results","Refuge_Summary",refugeName,sep="/")
+    dir.create(myFilepath)
+    ggsave(plot.4, filename=paste(refugeName, "_delta_SET_year_visit.pdf",sep=""),path=myFilepath, width=9,height=6.5, limitsize=FALSE)
+    ggsave(plot.4, filename=paste(refugeName, "_delta_SET_year_visit.pdf",sep=""),path=myFilepath, width=9,height=6.5, limitsize=FALSE)
+
+  }
+
+  write.csv(unit.delta.SET, file=paste(getwd(), "Results","Data_Summary_Results", paste("All_NWRs", "_delta_SET_year_visit.csv",sep=""),sep="/"),row.names=FALSE)
+
+  ###################################################################
+  #get estimates of delta SET by Site
+  message("Saving delta height (mm) estimates for each SMI unit (Site_Name) and generating plots.")
+
+  site.delta.SET<-list()
+  for(i in 1:length(smiUnitList)){
+
+    new.data<-subset(set.data, Site_Name==smiUnitList[i])
+    siteName<-unique(as.character(new.data$Site_Name))
+    refugeName<-unique(as.character(new.data$Unit_Code))
+    stateName<-unique(as.character(new.data$State))
+
+    new.summary<-summaryDelta(new.dataIn=new.data)
+    new.summary<-data.frame(State=stateName[1],Unit_Code=refugeName,Site_Name=siteName, new.summary)
+
+
+    dir.create(paste(getwd(), "Results","Data_Summary_Results","SMI_unit_Summary",sep="/"))
+    dir.create(paste(getwd(), "Results","Data_Summary_Results","SMI_unit_Summary",refugeName,sep="/"))
+    dir.create(paste(getwd(), "Results","Data_Summary_Results","SMI_unit_Summary",refugeName,siteName,sep="/"))
+
+    write.csv(new.summary, file=paste(getwd(), "Results","Data_Summary_Results","SMI_unit_Summary",refugeName,siteName, paste(siteName, "_delta_SET_year_visit.csv",sep=""),sep="/"),row.names=FALSE)
+
+    site.delta.SET<-rbind(site.delta.SET, new.summary)
+
+    #plot regional estimates
+    nStations=length(unique(new.data$Plot_Name))
+
+    #now plot unit results
+    SETplot.site<-ggplot(new.summary)+
+      aes(x=year.visit, y=mean,group=1)+
+      geom_smooth(method=lm,fullrange=FALSE, linetype=1, color="white")+
+      geom_errorbar(ymax=new.summary$mean+new.summary$SE, ymin=new.summary$mean-new.summary$SE, width=0.2, size=0.6, color=I("grey30"))+
+      geom_line(color="seagreen4",linetype=1, size=1)+
+      geom_point(size=2, color="seagreen4")+
+      theme(panel.background=element_rect(fill='white',color="black"))+
+      theme(panel.grid.major=element_blank(),panel.grid.minor=element_blank())+
+      theme(axis.line=element_line(color="black"))+
+      theme(panel.background=element_rect(color="black"))+
+      theme(axis.text.x = element_text(angle = 55, hjust = 1.2,vjust=1.2, size=10, color="black"),
+            axis.text.y = element_text(size=12, color="black"),
+            axis.title.x = element_text(size=13, hjust=0.5, vjust=1.9),
+            axis.title.y = element_text(angle = 90, vjust=1.2, size=13))+
+      ylim(min(new.summary$mean-new.summary$SE)-30,max(new.summary$mean+new.summary$SE)+30)+
+      #xlim(200.8,2014.2)
+      labs(x="Year (visits)", y="Elevation change (mm)")
+    #scale_x_discrete(limits=c(2009,2014),breaks=c(2009,2010,2011,2012,2013,2014,2015), "Year")+
+    #scale_y_continuous(limits=c(-5,35),breaks=c(-5,0,5,10,15,20,25,30,35), "Change in elevation (mm)")
+    plot.5<-SETplot.site+
+      ggtitle(paste(siteName," SET data (n = ", nStations,")",sep=""))
+
+    print(plot.5)
+
+    #save figure
+    myFilepath<-paste(getwd(), "Results","Data_Summary_Results","SMI_unit_Summary",refugeName,siteName,sep="/")
+    ggsave(plot.5, filename=paste(siteName, "_delta_SET_year_visit.pdf",sep=""),path=myFilepath, width=9,height=6.5, limitsize=FALSE)
+
+
+  write.csv(site.delta.SET, file=paste(getwd(), "Results","Data_Summary_Results", paste("All_SMI_units", "_delta_SET_year_visit.csv",sep=""),sep="/"),row.names=FALSE)
+}
+  ###################################################################
+  #get estimates of delta SET by Station
+  message("Saving delta height (mm) estimates for each Station (Plot_Name) and generating plots.")
+
+
+  station.delta.SET<-list()
+  for(i in 1:length(stationList)){
+
+    new.data<-subset(set.data, Plot_Name==stationList[i])
+    stationName<-unique(as.character(new.data$Plot_Name))
+    siteName<-unique(as.character(new.data$Site_Name))
+    refugeName<-unique(as.character(new.data$Unit_Code))
+
+    new.summary<-summaryDelta(new.dataIn=new.data)
+    new.summary<-data.frame(State=stateName[1],Unit_Code=refugeName,Site_Name=siteName,Plot_Name=stationName, new.summary)
+
+    #create folders
+    dir.create(paste(getwd(), "Results","Data_Summary_Results","Station_Summary",sep="/"))
+    dir.create(paste(getwd(), "Results","Data_Summary_Results","Station_Summary",refugeName,sep="/"))
+    dir.create(paste(getwd(), "Results","Data_Summary_Results","Station_Summary",refugeName,siteName,sep="/"))
+    dir.create(paste(getwd(), "Results","Data_Summary_Results","Station_Summary",refugeName,siteName,stationName,sep="/"))
+
+    write.csv(new.summary, file=paste(getwd(), "Results","Data_Summary_Results","Station_Summary",refugeName,siteName,stationName, paste(stationName, "_delta_SET_year_visit.csv",sep=""),sep="/"),row.names=FALSE)
+
+    station.delta.SET<-rbind(station.delta.SET, new.summary)
+
+    #now plot unit results
+    SETplot.station<-ggplot(new.summary)+
+      aes(x=year.visit, y=mean,group=1)+
+      geom_smooth(method=lm,fullrange=FALSE, linetype=1, color="white")+
+      geom_errorbar(ymax=new.summary$mean+new.summary$SE, ymin=new.summary$mean-new.summary$SE, width=0.2, size=0.6, color=I("grey30"))+
+      geom_line(color="seagreen3",linetype=1, size=1)+
+      geom_point(size=2, color="seagreen3")+
+      theme(panel.background=element_rect(fill='white',color="black"))+
+      theme(panel.grid.major=element_blank(),panel.grid.minor=element_blank())+
+      theme(axis.line=element_line(color="black"))+
+      theme(panel.background=element_rect(color="black"))+
+      theme(axis.text.x = element_text(angle = 55, hjust = 1.2,vjust=1.2, size=10, color="black"),
+            axis.text.y = element_text(size=12, color="black"),
+            axis.title.x = element_text(size=13, hjust=0.5, vjust=1.9),
+            axis.title.y = element_text(angle = 90, vjust=1.2, size=13))+
+      ylim(min(new.summary$mean-new.summary$SE)-30,max(new.summary$mean+new.summary$SE)+30)+
+      #xlim(200.8,2014.2)
+      labs(x="Year (visits)", y="Elevation change (mm)")
+    #scale_x_discrete(limits=c(2009,2014),breaks=c(2009,2010,2011,2012,2013,2014,2015), "Year")+
+    #scale_y_continuous(limits=c(-5,35),breaks=c(-5,0,5,10,15,20,25,30,35), "Change in elevation (mm)")
+    plot.6<-SETplot.station+
+      ggtitle(paste(stationName," SET data.",sep=""))
+
+    print(plot.6)
+
+    #save figure
+    myFilepath<-paste(getwd(), "Results","Data_Summary_Results","Station_Summary",refugeName,siteName,stationName,sep="/")
+    ggsave(plot.6, filename=paste(stationName, "_delta_SET_year_visit.pdf",sep=""),path=myFilepath, width=9,height=6.5, limitsize=FALSE)
+
+    #############################################################################
+    #create plots of pin-level linear models (to look at slopes)
+
+    #Rcolorbrewer function
+    getPalette = colorRampPalette(brewer.pal(9, "Set1"))
+
+    PinRegressionPlot<-ggplot(new.data)+
+      aes(x=Year, y=value)+
+      #geom_errorbar(ymax=summary$mean+summary$SE, ymin=summary$mean-summary$SE, width=0.1, size=0.5, color=I("grey50"))+
+      geom_line(aes(group=variable, color=variable),linetype=2, size=0.5, alpha=0.3)+
+      geom_smooth(method="lm",aes(group=variable,color=variable),se=FALSE)+
+      geom_point(size=2, aes(color=variable),alpha=0.7)+
+      theme(axis.line=element_line(color="black"))+
+      theme(panel.background=element_rect(fill='white',color="black"))+
+      theme(panel.grid.major=element_blank(),panel.grid.minor=element_blank())+
+      #theme(panel.background=element_rect(color="black"))+
+      theme(axis.text.x = element_text(angle = 45, hjust = 0.5,vjust=0.2, size=12, color="black"),
+            axis.text.y = element_text(size=12, color="black"),
+            axis.title.x = element_text(size=15, hjust=0.5, vjust=0.2),
+            axis.title.y = element_text(angle = 90, vjust=1.2, size=15))+
+      #scale_color_manual("Pin", values=getPalette(9))+
+      #scale_fill_manual("Pin", values=getPalette(9))+
+      #scale_x_continuous(limits=c(2004,2010),breaks=c(2004,2005,2006,2007,2008,2009,2010), "Year")+
+      ylab("Elevation change (mm)")
+
+    plot.7<-PinRegressionPlot+facet_grid(Plot_Name~Position_Name)+
+      theme(panel.spacing = unit(1, "lines"))+
+      ggtitle(paste(stationName, " SET pin-level linear regression (Position x Station)"))
+
+    print(plot.7)
+
+    #save figure
+    myFilepath<-paste(getwd(), "Results","Data_Summary_Results","Station_Summary",refugeName, siteName, stationName,sep="/")
+    ggsave(plot.7, filename=paste(stationName, "_Pin_slope_year.pdf",sep=""),path=myFilepath, width=9,height=6.5, limitsize=FALSE)
+
+
+  }
+
+  write.csv(station.delta.SET, file=paste(getwd(), "Results","Data_Summary_Results", paste("All_Stations", "_delta_SET_year_visit.csv",sep=""),sep="/"),row.names=FALSE)
+
+
+}

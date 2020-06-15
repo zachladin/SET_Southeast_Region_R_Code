@@ -1,0 +1,1068 @@
+---
+title: "USFWS, Southeast Region SET Data Analysis"
+author: "Zachary Ladin (zach@udel.edu)"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+  theme: lumen
+bibliography: My_Library.bib
+---
+
+<br />
+
+
+## Overview
+
+Salt marshes are ecotonal ecosystems that form the dominant transition zone between terrestrial and marine communities. These ecosystems are critical for absorbing the energy of ocean storms and preserving shorelines, improving water quality in bays and estuaries, providing nutrients to marine food webs, and supplying critical habitat for both the reproduction of a suite of ocean species and for use by an entire community of breeding and migratory birds. Wildlife species that depend on salt marshes are some of the highest conservation priorities, many of which occur in coastal US Fish and Wildlife Service National Wildlife Refuges. Salt marshes are increasingly influenced to some extent by anthropogenic alteration, and are threatened by accelerated rates of sea-level rise. 
+
+The goal of this project under a cooperative agreement between US Fish & Wildlife Service and the University of Delaware, is to further improve existing code that Zach Ladin developed previously for modeling, analyzing, and generating trend-estimation graphs and reports of surface elevation table (SET) data for regions and refuge managers, and for extending this functionality for incorporation within the USFWS National SET Application. Using these tools, an updated report integraing exisiting SET data from USFWS Northeast and Southeast Regions will be generated.
+
+The US Fish and Wildlife Service Region 4 has implemented the Salt Marsh Integrity Monitoring Protocol [@moorman_et_al_2019] in an ongoing effort to assess and track the condition of salt marsh habitats on USFWS Refuges with salt marsh habitat. The development of analytical tools using data from this long-term monitoring program we will help identify priority analyses for refuge-specific monitoring and management decisions. Here, we extend a recently-completed suite of analysis functionality within program R [@r-base] that was developed to analyze the surface elevation table (SET) data collected by the US Fish and Wildlife Service and other partnering institutions in Region 4. This report contains results using these tools to analyze SET data from the southeast region (Region 4) USFWS refuges.
+
+## Objectives
+
+1)	Analyze SET data to determine temporal trends in the relative change in salt marsh surface elevation (mm) in US Fish & Wildlife Service, Southeast Region.
+2)	Improve analytical tools and incorporate user feedback in program R [@r-base] to facilitate current and future automated analysis of SET data.
+3) Integrate functions for formatting, QA/QC'ing, analyzing, and visualizing results of SET data for use in the USFWS SET online Application
+
+## Methods
+
+We developed data analysis tools in program R [@r-base] that enables users to analyze SET data using methods described in the SOP 8: SET and Marker Horizon Data Analysis [@lynch_surface_2015]. This analysis includes data collected from USFWS refuges located in Region 4 (Table 1). Data was aquired from reports that were downloaded from USFWS SET website. Standarized column headers and fields for SET data entered into the National SET Application were discussed and refined, to enable the streamlining of data processing and integration with functions included within the R code used in the present analysis.
+
+We first visualized SET data, by computing changes in marsh elevation (mm) at each pin, and plotted these relative marsh heights against time (years).  Then, by avearging among SET stations, discrete marsh monitoring sites, and National Wildlife Refuges (NWRs), produced figures showing (mean $\pm$ SE) relative changes in marsh elevation (mm/year). We converted raw SET measurements of salt marsh surface elevation (mm) to the rate of change in surface elevation (mm/year; hereafter delta SET) from the initial measurement at time (t0), following methods described in @lynch_surface_2015. To calculate mean and variance estimates of delta SET at higher-levels, we averaged delta SET estimates (i.e., slopes of regression models) over the four positions, and then these were averaged to get SET station-level estimates (Lynch et al. 2015). We then computed higher-level estimation of rates (i.e., mean $\pm$ SE slope of delta SET) at the marsh site level, NWR Unit level, and at the regional scale.  Additionally, we developed NWR and Site-level summaries for assessment of local-scale changes in marsh eleveation change dynamics.
+
+```{r, echo=FALSE}
+#set global options
+library(knitr)
+library(rmdformats)
+
+## Global options
+knitr::opts_chunk$set(message=FALSE, warning=FALSE)
+
+```
+
+### Load packages and functions in R.
+```{r setup, message=FALSE, warning=FALSE}
+
+suppressMessages({
+
+#load packages
+library(httr)
+library(markdown)
+library(stringr)
+library(lme4)
+library(lmerTest)
+library(plyr)
+library(reshape)
+library(RColorBrewer)
+library(colorRamps)
+library(ggplot2)
+library(ggrepel)
+library(grid)
+library(data.table)
+library(lubridate)
+library(ggmap)
+library(rjags)
+library(runjags)
+library(scales)
+library(spatstat)
+library(ggsn)
+library(data.table)
+library(kableExtra)
+library(ggpmisc)
+library(rsconnect)
+
+#Load functions
+message("Loading source files (these are all the functions).")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/summaryFunction.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/summaryDelta.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/formatSETdata.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/formatSETdataR4.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/getSummariesAndPlot.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/getSlope.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/getSlopeObserver.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/getSlopeBayesNoObs.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/getSlopeBayesObserver.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/obsEffect.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/obsEffectBayes.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/writeJAGSmodels.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/runJAGSmodelYear.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/runJAGSmodelYearVisit.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/getMaps.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/getMapsBayes.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/runBayesYearVisitObs.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/runBayesYearVisitNoObs.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/SummaryDataTable1.R")
+source("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/R_source/computeTrends.R")
+
+#register Google Maps API key
+register_google(key="AIzaSyDerv2JQubJ_Dg8_RKBZCeyo5zqsM5USw0")
+
+})
+```
+
+<br />
+<br />
+
+
+## Results
+
+### Statement of Progress
+1)	We are continuing to work cooperatively with USFWS staff and the I&M coordinator for USFWS Southeast Region, and have identified the following analysis priorities for data associated with SET data. In this case we address priorities associated specifically with salt marsh surface elevation table (SET) data:
+
+2)	We analyzed data collected at SET stations (*N* = 58) located within monitoring sites (*N* = 21; Fig. 1) among 18 NWRs  within the USFWS Southeast Region 4 (Table 1). 
+
+3)	We have developed analytical tools in program R [@r-base] to facilitate current and future analysis of SET data. Extensive R code is provided in the form of scripts (.R files) that contain functions to format data, summarize data in tabular and graphical formats, analyze data, save results (tables and figures), and produce R Markdown files (.Rmd) that can generate .doc, .html, or .pdf reports. All R code is thoroughly annotated with clear comments to help users implement analyses using program R and R Studio.
+    
+4)	We compared spatial patterns in SET trends within and among sampling locations through the visualization of spatial trend estimates of delta SET rates (mm/year), by providing R code that creates maps of SET stations and displays the trend direction (positive, negative) along with the magnitude of the trend. These maps provide a nice visualization tool, that hopefully, refuge biologists can use to quickly assess patterns of marsh elevation trends at particular SET stations.
+
+<br />
+<br />
+
+### Compile and export refuge data.
+```{r, warning=FALSE, message=FALSE}
+
+#build function to read in and combine data
+combineData<-function(fileList){
+  
+  data.comb<-list()
+  for(i in 1:length(fileList)){
+    
+    new.data<-read.csv(fileList[i],skip=3)
+    data.comb<-rbind(data.comb,new.data)
+  }
+return(data.comb) 
+}
+
+myFileList<-list.files("/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/Data/Refuge_Data_5-13-2020", full.names=TRUE)
+
+data.comb<-combineData(fileList = myFileList)
+
+#Export data
+write.csv(data.comb, file="/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/Data/R4_Export_Pin_Data_5-13-2020.csv",row.names=FALSE)
+
+```
+
+
+### Load raw surface elevation table (SET) data.
+```{r }
+#read in raw data from USFWS SET database
+rawData<-read.csv(file="/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html/Data/R4_Export_Pin_Data_5-13-2020.csv" , header=TRUE,as.is=TRUE)
+
+```
+
+<br />
+<br />
+
+### Format and view SET data.
+```{r , message=FALSE}
+
+#my working dir
+mydir<-"/Users/zach/Dropbox (ZachTeam)/Projects/SET_USFWS_Region_4/Reports/RMarkdown_html"
+
+#format data providing rawData object and mydir (a filepath to a folder named "Data" where SET_coords.csv file is saved)
+data.formatted<-try(formatSETdataR4(dataIn=rawData, dataDir=mydir))
+
+#head(data.formatted)
+```
+
+<br />
+<br />
+
+#### Table 1. List of 18 US Fish and Wildlife Service National Wildlife Refuge (NWR) units included in SET data analyses along with corresponding State, count of SET stations, count of unique observers, duration of years, and starting and ending years of data collection. 
+```{r, message=FALSE, warning=FALSE}
+
+data<-data.formatted
+
+#make Year an integer
+data$Year<-as.integer(as.character(data$Year))
+
+data.table.1<-unique(data[,c("State","RefugeName")])
+
+#remove NAs
+data.table.1<-data.table.1[complete.cases(data.table.1),]
+
+#get freqency of SET stations per refuge
+sub.data<-unique(data[,c("State","RefugeName","Site_Name","Plot_Name")])
+count.stations<-table(sub.data$RefugeName, sub.data$Plot_Name)
+count.stations.total<-rowSums(count.stations)
+count.stations.total.1<-data.frame(RefugeName=names(count.stations.total), nSET=as.data.frame(count.stations.total))
+
+#get years sampled (start and end), and get number of observers
+sub.data.years<-unique(data[,c("RefugeName","Year","ReaderFullName")])
+
+#get refugeList
+refugeList<-unique(sort(as.character(sub.data.years$RefugeName)))
+
+#loop over refugeList to get range of years per refuge
+range.years<-list()
+for(i in 1:length(refugeList)){
+  #subset data for 1 refuge
+  new.data<-subset(sub.data.years, RefugeName==refugeList[i])
+  #get RefugeName
+  refugeName<-as.character(unique(new.data$RefugeName))
+  #get starting year
+  startYear<-min(new.data$Year)
+  #get ending year
+  endYear<-max(new.data$Year)
+  #get total years
+  nYears<-endYear-startYear
+  #get n unique observers (data recorders)
+  nObs<-length(unique(new.data$ReaderFullName))
+
+  range.years.1<-data.frame(RefugeName=refugeName, startYear=startYear, endYear=endYear, nYears=nYears,nObs=nObs)
+  range.years<-rbind(range.years, range.years.1)
+
+}
+
+#combine with SummaryTable.1
+data.table.2<-na.omit(merge(data.table.1, count.stations.total.1, by="RefugeName",all.x=TRUE))
+
+#now combine with range.years
+data.table.3<-merge(data.table.2, range.years, by="RefugeName")
+
+#get refuge order sorted North to South
+refugeLat<-aggregate(Latitude~RefugeName, data=data, FUN="mean")
+refugeOrder<-refugeLat[order(refugeLat$Latitude, decreasing = TRUE),]
+refugeOrderList<-unique(refugeOrder$RefugeName)
+#length(refugeOrderList)
+
+#Now sort table by Latitude (reorder RefugeName factor)
+#create data.frame with NWRs ordered from North to South
+RefugeOrder.df<-data.frame(RefugeName=refugeOrderList, orderNum=seq(1:length(refugeOrderList)))
+
+#rename column headers
+colnames(data.table.3)<-c("RefugeName", "State",
+                            "nSET","Start_Year","End_Year","nYears","nObservers")
+
+#reorder columns
+data.table.4<-data.table.3[,c("State","RefugeName","nSET","nObservers","nYears","Start_Year","End_Year")]
+
+#create integer column of order for NWRs
+data.table.order<-merge(data.table.4, RefugeOrder.df, by=c("RefugeName"),all.x=TRUE)
+data.table.order<-data.table.order[order(data.table.order$orderNum),]
+data.table.5<-data.table.order
+data.table.5$orderNum<-NULL
+
+#remove row.names from table
+row.names(data.table.5)<-NULL
+
+#rename column headers
+colnames(data.table.5)<-c("NWR", "State","SET Stations (N)", "Count Observers (N)","Duration (years)","Starting Year","Ending Year")
+
+kable(data.table.5, digits=2) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE, font_size = 12)
+
+```
+
+<br />
+<br />
+
+#### Figure 1. Study Area showing sites (*N* = 21) where SET benchmarks are located among 18 USFWS National Wildlife Refuges, Southeast Region. 
+```{r, warning=FALSE, message=FALSE, fig.width=10, fig.height=10, dpi=150}
+#Map with study area locations
+
+#get locations of SETs
+SETcoords<-unique(data[, c("RefugeName","Site_Name","Plot_Name","Longitude","Latitude")])
+
+#aggregate to get Site coords
+site.long<-aggregate(Longitude~Site_Name+RefugeName, data=SETcoords, FUN=mean)
+site.lat<-aggregate(Latitude~Site_Name+RefugeName, data=SETcoords, FUN=mean)
+site.coords.merge<-merge(site.long, site.lat, by=c("Site_Name","RefugeName"),all=TRUE)
+
+meanLong<-mean(SETcoords$Longitude)
+meanLat<-mean(SETcoords$Latitude)
+
+#get basemap
+basemap<-get_map(location=c(meanLong, meanLat),zoom=6, maptype="terrain")
+#ggmap(basemap)
+
+#get map extent
+mapExtent<-attr(basemap, "bb")
+
+
+studyAreaMap<-ggmap(basemap)+
+  geom_point(data=site.coords.merge, aes(x=Longitude, y=Latitude),color="black",size=3)+
+  labs(x="Longitude",y="Latitude")+
+  theme(
+    axis.text=element_text(size=18),
+    axis.title=element_text(size=22),
+    panel.border=element_rect(fill="transparent", color="black"),
+    legend.position = "none"
+    # legend.position = c(0.15,0.7),
+    # legend.key.size = unit(2,"line"),
+    # legend.text = element_text(size=14),
+    # legend.title=element_text(size=20),
+    # legend.background = element_rect(fill=alpha("white",0.9), color="black")
+  )+
+  geom_label_repel(data=site.coords.merge,aes(x=Longitude,y=Latitude, label=Site_Name), fill="gray30",color="white", show.legend=FALSE, label.padding=0.4, size=4, segment.alpha=0.7, alpha=0.8)+
+  ggsn::scalebar(x.min=mapExtent$ll.lon, x.max=mapExtent$ur.lon, y.min=mapExtent$ll.lat, y.max=mapExtent$ur.lat,transform=TRUE, dist_unit="km",dist=200, st.dist=0.015, height = 0.01,anchor=c(x=-73,y=28))
+
+studyAreaMap
+
+```
+
+<br />
+<br />
+
+
+#### Figure 2. Plot change in elevation data relative to initial height (mm) over time for all pin-level SET data.
+```{r, fig.width=7, fig.height=5, dpi=150}
+
+set.data.all<-data
+
+  SETallDatesPlot<-ggplot(data=set.data.all, aes(x=Date, y=value, group=1))+
+    geom_point(aes(color=value),alpha=0.7, size=1, shape=16)+
+    scale_color_gradient2(low="tomato",mid="gray60",high="royalblue1", guide_colorbar(title="Delta Elev. (mm)"))+
+    #geom_path(aes(color=Plot_Name),alpha=0.2)+
+    geom_smooth(method=lm, fullrange=TRUE, linetype=1, color="gray20", se=TRUE)+
+    scale_y_continuous(expand=c(0.1,0.1))+
+    scale_x_date(date_breaks = "1 year",date_labels = "%Y")+
+        theme(panel.background = element_rect(color="black",fill="transparent"),
+          panel.border = element_rect(color="black", fill="transparent"),
+          axis.text.x = element_text(size=12, color="black"),
+          axis.text.y = element_text(size=12, color="black"),
+          axis.title.x = element_text(size=14, hjust=0.5, vjust=1.9),
+          axis.title.y = element_text(angle = 90, vjust=1.2, size=14),
+          legend.position = c(0.11,0.2),
+          legend.key.size = unit(1,"line"))+
+    geom_hline(yintercept=0, linetype=2, color="gray30",alpha=0.8)+
+    stat_poly_eq(formula = y~ x, eq.with.lhs = "italic(hat(y))~`=`~",aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), parse = TRUE)+
+    labs(x="Year",y="Relative change in pin height (mm)")
+
+  SETallDatesPlot
+```
+
+<br />
+<br />
+
+#### Table 2. List of Locations with outliers (e.g., relative change in height (mm) > 400 mm or < -400 mm)
+```{r}
+
+set.data.findOutliers<-subset(set.data.all, c(value > 400 | value < -400))
+
+#simplify
+set.outliers<-set.data.findOutliers[,c("State","RefugeName","Site_Name","Plot_Name","EventDate","Date","PipeDirectionCode","variable","value")]
+
+#get unique filtering term
+set.outliers$Plot_Date_Arm_Pin<-paste(set.outliers$Plot_Name, set.outliers$EventDate,set.outliers$PipeDirectionCode,set.outliers$variable, sep="_")
+
+#bring in raw data to check for flags or comments?
+rawData$Plot_Date_Arm_Pin<-paste(rawData$Plot_Name, rawData$EventDate, rawData$PipeDirectionCode, paste("Pin",rawData$PinPosition,sep=""), sep="_")
+
+#get list of outliers
+outlierList<-unique(set.outliers$Plot_Date_Arm_Pin)
+
+#subset rawData
+rawData.outliers<-subset(rawData, Plot_Date_Arm_Pin %in% outlierList)
+
+outliers.sub<-rawData.outliers[,c("Site_Name","Plot_Name","ReaderFullName","PipeDirectionCode","PinPosition","PinLength_mm","PinLength_mm_Baseline","EventDate","PinHeight_mm_Uncorrected","PinHeight_mm","PinNotes","DataProcessingLevelCode",
+                                  "ObservationTypeCode","PinFlags")]
+
+kable(outliers.sub, digits=2) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE, font_size = 7)
+
+
+```
+
+<br />
+<br />
+
+#### Figure 3. Plot change in elevation data relative to initial height (mm) over time for SET data without outliers.
+```{r, message=FALSE,fig.width=7, fig.height=5, dpi=150}
+
+set.data.noOutliers<-subset(set.data.all, c(value < 400 & value > -400))
+
+#remove Pea Island (for now)
+set.data.noPeaIsland<-subset(set.data.noOutliers, RefugeName != "Pea Island")
+
+  SETallDatesPlot_noOutliers<-ggplot(data=set.data.noPeaIsland, aes(x=Date, y=value, group=1))+
+    geom_point(aes(color=value),alpha=0.7, size=1, shape=16)+
+    scale_color_gradient2(low="tomato",mid="gray60",high="royalblue1", guide_colorbar(title="Delta Elev. (mm)"))+
+    #geom_path(aes(color=Plot_Name),alpha=0.2)+
+    geom_smooth(method=lm, fullrange=TRUE, linetype=1, color="gray20", se=TRUE)+
+    scale_y_continuous(expand=c(0.1,0.1))+
+    scale_x_date(date_breaks = "1 year",date_labels = "%Y")+
+        theme(panel.background = element_rect(color="black",fill="transparent"),
+          panel.border = element_rect(color="black", fill="transparent"),
+          axis.text.x = element_text(size=12, color="black"),
+          axis.text.y = element_text(size=12, color="black"),
+          axis.title.x = element_text(size=14, hjust=0.5, vjust=1.9),
+          axis.title.y = element_text(angle = 90, vjust=1.2, size=14),
+          legend.position = c(0.11,0.2),
+          legend.key.size = unit(1,"line"))+
+    geom_hline(yintercept=0, linetype=2, color="gray30",alpha=0.8)+
+    stat_poly_eq(formula = y~ x,eq.with.lhs = "italic(hat(y))~`=`~",aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), parse = TRUE)+
+    labs(x="Year", y="Relative change in pin height (mm)")
+
+  SETallDatesPlot_noOutliers
+
+```
+
+
+<br />
+<br />
+
+
+#### Function to compute trends and summary statistics at SET, Site, and Refuge levels. 
+```{r}
+
+computeTrends<-function(dataIn){
+
+  set.data<-dataIn
+
+  #get list of unique NWRs
+  refugeList<-sort(unique(as.character(set.data$RefugeName)))
+  
+  all.pins<-list()
+  all.positions<-list()
+  all.stations<-list()
+  all.sites<-list()
+  all.refuges<-list()
+  for(j in 1:length(refugeList)){
+  
+    #print refuge to show progress
+    print(refugeList[j])
+    
+    refuge.data<-subset(set.data,RefugeName==refugeList[j])
+    
+    #get refugeName
+    refugeName<-as.character(unique(refuge.data$RefugeName))
+    
+    #get siteList
+    siteList<-sort(unique(as.character(refuge.data$Site_Name)))
+    
+    refuge.pins<-list()
+    refuge.positions<-list()
+    refuge.stations<-list()
+    refuge.sites<-list()
+    for(k in 1:length(siteList)){
+      
+      site.data<-subset(refuge.data, Site_Name==siteList[k])
+      
+      siteName<-as.character(unique(site.data$Site_Name))
+      
+      #print Site_Name to show progress
+      print(siteName)
+      
+      #get stationList
+      stationList<-sort(unique(as.character(site.data$Plot_Name)))
+      
+      #get refuge covariates
+      refugeCovs<-unique(site.data[,c("State","RefugeName",
+                                      "Site_Name","Plot_Name","Latitude","Longitude")])
+      
+      #get siteCovs
+      siteCovs<-unique(site.data[,c("State","RefugeName","Site_Name")])
+      
+      site.pin.slopes<-list()
+      site.positions<-list()
+      site.stations<-list()
+      for(i in 1:length(stationList)){
+        #print(stationList[i])
+        
+        #print Plot_Name (Station) to show progress
+        print(stationList[i])
+        
+        new.data<-subset(site.data, Plot_Name==stationList[i])
+        
+        stationName<-as.character(unique(new.data$Plot_Name))
+        
+        #get pospinList
+        pospinList<-unique(sort(as.character(new.data$pos.pin)))
+        
+        #get covariates
+        stationCovs<-unique(new.data[,c("State","RefugeName","Site_Name","Plot_Name","Latitude","Longitude")])
+        
+        positionCovs<-unique(new.data[,c("State","RefugeName","Site_Name","Plot_Name","Position_Name","Latitude","Longitude")])
+        
+        message("Getting slope and intercept from delta at each pin vs. time regressions.")
+        regResults.out<-list()
+        for(k in 1:length(pospinList)){
+          #print(pospinList[k])
+          sub.data<-subset(new.data, pos.pin==pospinList[k])
+          sub.data$value<-as.numeric(sub.data[,"value"])
+          sub.data$ReaderFullName<-as.factor(as.character(sub.data$ReaderFullName))
+          sub.dataCovs<-unique(sub.data[,c("State","RefugeName","Site_Name","Plot_Name","Position_Name","variable","pos.pin")])
+          
+          #linear model with Visit nested within Year, and if there is only 1 visit, fit just Year, force linear model through origin 0
+          mod.1<-tryCatch({
+            lm(value ~ Date, data=sub.data)
+          },error=function(cond2){
+            cond2=NA
+          })
+          
+          #get slope over years
+          slope<-NULL
+          try(slope<-coef(summary(mod.1))[ , "Estimate"][2])
+          intercept<-NULL
+          try(intercept<-coef(summary(mod.1))[ , "Estimate"][1])
+          
+          #combine slope with station covs
+          regResults<-NULL
+          regResults<-tryCatch({
+            data.frame(sub.dataCovs,slope=slope,intercept=intercept)
+          },error=function(cond2){
+            cond2=data.frame(sub.dataCovs,slope=NA,intercept=NA)
+            cond2
+          })
+          
+          #compile regResults over each pin
+          regResults.out<-rbind(regResults.out, regResults)
+        }
+        
+        #get means for each position
+        station.positions<-summaryFunction(dataIn=regResults.out, factor="Position_Name", response="slope")
+        station.positions.out.1<-merge(station.positions, positionCovs, by="Position_Name")
+        station.positions.out<-station.positions.out.1[,c("State","RefugeName","Site_Name","Plot_Name","Latitude","Longitude","Position_Name","n","mean","var","SD","SE","CV","lwr","upr")]
+        
+        #get station means
+        station.slopes<-summaryFunction(dataIn=station.positions.out, factor="Plot_Name",response="mean")
+        station.merge.1<-merge(station.slopes, refugeCovs, by="Plot_Name")
+        station.merge<-station.merge.1[,c("State","RefugeName","Site_Name","Plot_Name","Latitude","Longitude", "n","mean","var","SD","SE","CV","lwr","upr")]
+        
+        #compile pin-level slopes for each site
+        site.pin.slopes<-rbind(site.pin.slopes,regResults.out)
+        
+        #compile position means
+        site.positions<-rbind(site.positions,station.positions.out)
+        
+        #compile station means
+        site.stations<-rbind(site.stations, station.merge)
+      }
+      
+      #get site means
+      site.slopes<-summaryFunction(dataIn=site.stations, factor="Site_Name",response="mean")
+      site.merge.1<-merge(site.slopes, siteCovs, by="Site_Name")
+      site.merge<-site.merge.1[,c("State","RefugeName","Site_Name", "n","mean","var","SD","SE","CV","lwr","upr")]
+      
+      refuge.pins<-rbind(refuge.pins,site.pin.slopes)
+  
+      refuge.positions<-rbind(refuge.positions,site.positions)
+  
+      refuge.stations<-rbind(refuge.stations, site.stations)
+  
+      refuge.sites<-rbind(refuge.sites, site.merge)
+      
+      #get refuge-level means
+      refuge.slopes<-summaryFunction(dataIn=refuge.stations, factor="RefugeName",response="mean")
+      refuge.merge.1<-merge(refuge.slopes, sub.dataCovs, by="RefugeName")
+      refuge.merge<-refuge.merge.1[,c("State","RefugeName", "n","mean","var","SD","SE","CV","lwr","upr")]
+    }
+  
+    #compile all results
+    all.pins<-rbind(all.pins, refuge.pins)
+    
+    all.positions<-rbind(all.positions, refuge.positions)
+    
+    all.stations<-rbind(all.stations, refuge.stations)
+    
+    all.sites<-rbind(all.sites, refuge.sites)
+    
+    all.refuges<-rbind(all.refuges,refuge.merge )
+    
+  }
+  
+all.pins<<-all.pins
+all.positions<<-all.positions
+all.stations<<-all.stations
+all.sites<<-all.sites
+all.refuges<<-all.refuges
+}
+
+```
+
+<br />
+<br />
+
+#### Execute computeTrends(dataIn) function. 
+```{r, echo=TRUE, message=FALSE, results = "hide"}
+#test computeTrends
+computeTrends(dataIn=set.data.noPeaIsland)
+
+```
+
+<br />
+<br />
+
+#### Figure 4. Plot change in elevation data relative to initial height (mm) over time for all SET data.
+```{r, message=FALSE,fig.width=13, fig.height=30, dpi=150}
+
+#find significant trends: For this section we need to use the regress, then average method, with no observer effects
+# use values from computeTrends() above 'all
+
+stationList<-unique(set.data.noPeaIsland$Plot_Name)
+
+station.sig.trends.out<-list()
+for(i in 1:length(stationList)){
+  
+  #subset data
+  new.station.data<-subset(set.data.noPeaIsland, Plot_Name==stationList[i])
+  
+  #fit simple linear regression model
+  station.mod<-lm(value~Date, data=new.station.data)
+  
+  #get model summary stats
+  mod.summary<-summary(station.mod)
+  
+  #create data.frame
+  mod.summary.stats<-data.frame(Plot_Name=stationList[i],t(mod.summary$coefficients[2,]))
+  
+  #add column indicating significance
+  mod.summary.stats$Significant<-ifelse(mod.summary.stats$Pr...t.. <= 0.05,"Yes","No")
+  
+  #add column indicating direction of trend
+  mod.summary.stats$Trend<-ifelse(mod.summary.stats$Estimate>0 ,"Positive","Negative")
+  #compile station model results
+  station.sig.trends.out<-rbind(station.sig.trends.out, mod.summary.stats)
+}
+
+#now merge these results back with set.data.noPeaIsland
+set.data.merge<-merge(set.data.noPeaIsland, station.sig.trends.out, by="Plot_Name",all.x=TRUE)
+
+#add sig.trend column
+set.data.merge$Sig_Trend<-ifelse(set.data.merge$Significant=="Yes" & set.data.merge$Trend=="Positive","Positive",
+                                 ifelse(set.data.merge$Significant=="Yes" & set.data.merge$Trend=="Negative","Negative",
+                                        "Not Significant"))
+
+#set factor level order for Sig_Trend
+set.data.merge$Sig_Trend<-factor(set.data.merge$Sig_Trend, levels=c("Positive","Not Significant","Negative"))
+
+mySigColors<-c("royalblue1","gray20","tomato")
+mySigFills<-c(alpha("royalblue1",0.3), alpha("gray20",0.3),alpha("tomato",0.3))
+
+  SETallDatesPlot_noOutliers<-ggplot(data=set.data.merge, aes(x=Date, y=value, group=1))+
+    geom_point(color="gray50",alpha=0.7, size=0.8, shape=16)+
+    #geom_path(aes(color=Plot_Name),alpha=0.2)+
+    geom_smooth(aes(color=Sig_Trend, fill=Sig_Trend),method=lm, fullrange=TRUE, linetype=1, se=TRUE)+
+    scale_color_manual(values=mySigColors)+
+    scale_fill_manual(values=mySigFills)+
+    scale_y_continuous(expand=c(0.1,0.1))+
+    scale_x_date(date_breaks = "2 year",date_labels = "%Y")+
+        theme(panel.background = element_rect(color="black",fill="transparent"),
+          panel.border = element_rect(color="black", fill="transparent"),
+          axis.text.x = element_text(size=10, color="black"),
+          axis.text.y = element_text(size=10, color="black"),
+          axis.title.x = element_text(size=12, hjust=0.5, vjust=1.9),
+          axis.title.y = element_text(angle = 90, vjust=1.2, size=12),
+          legend.position = "top",
+          legend.key.size = unit(1,"line"),
+          legend.text = element_text(size=10),
+          legend.title=element_text(size=12),
+          legend.background = element_rect(fill=alpha("white",0.9), color="black"))+
+    geom_hline(yintercept=0, linetype=2, color="gray30",alpha=0.8)+
+    stat_poly_eq(formula = y~ x,eq.with.lhs = "italic(hat(y))~`=`~",aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), parse = TRUE)+
+    labs(x="Year", y="Relative difference in pin height (mm)")
+
+
+  
+#try facet by SET
+  SETallDatesPlot_noOutliers_Facet<-SETallDatesPlot_noOutliers+facet_wrap(~Plot_Name, scales="free", drop=TRUE, ncol=4)+
+    theme(strip.text=element_text(size=12))
+
+  SETallDatesPlot_noOutliers_Facet
+
+```
+
+<br />
+<br />
+
+
+#### Figure 5. Refuge-level trend (mean $\pm$ SE) in change in marsh elevation (mm/year).
+```{r, fig.width=7, fig.height=6, dpi=150}
+#Refuge-level
+
+#sort by mean
+refuge.order<-all.refuges[order(all.refuges$mean,decreasing=TRUE),]
+refuge.order$RefugeName<-factor(refuge.order$RefugeName, levels=unique(as.character(refuge.order$RefugeName)))
+
+refuge.trend.plot<-ggplot(data=refuge.order, aes(x=RefugeName, y=mean))+
+  geom_bar(stat="identity",aes(fill=mean),alpha=0.9)+
+  geom_errorbar(aes(ymin=mean-SE, ymax=mean+SE, color=mean),width=0, show.legend=FALSE)+
+  geom_hline(yintercept = 0, linetype=2, color=alpha("lightgray",0.8))+
+  scale_color_gradient2(low="tomato",mid="gray60",high="royalblue1")+
+  scale_fill_gradient2(low="tomato",mid="gray60",high="royalblue1", guide_colorbar(title="Trend\n(mm/year)"))+
+  theme(panel.background = element_rect(fill="white"),
+        panel.border=element_rect(fill="transparent",color="black"),
+        axis.text.x=element_text(angle=90,  vjust=0.5, hjust=1),
+        legend.position = c(0.08,0.22),
+        legend.background = element_rect(fill = "white", colour = "transparent"))+
+  #labs(y="Trend (mm/year)", x="Refuge",title="Refuge-level mean (±SE) trend (mm/year) in change in marsh elevation.", fill="Trend", color=NULL)
+  labs(y="Trend (mm/year)", x="Refuge",color=NULL)
+
+print(refuge.trend.plot)
+
+```
+
+<br />
+<br />
+
+#### Figure 6. Site-level trend (mean $\pm$ SE) in change in marsh elevation (mm/year).
+```{r, fig.width=7, fig.height=6, dpi=150}
+
+#get sorted RefugeName levels
+refuge.order<-all.refuges[order(all.refuges$mean,decreasing=TRUE),]
+refuge.order$RefugeName<-factor(refuge.order$RefugeName, levels=unique(as.character(refuge.order$RefugeName)))
+
+#sort by mean
+site.order<-all.sites[order(all.sites$mean,decreasing=TRUE),]
+
+#site.order$Site_Name<-all.sites[order(all.sites$RefugeName, all.sites$mean,decreasing=FALSE),]
+site.order$RefugeName<- factor(site.order$RefugeName, levels=refuge.order$RefugeName[order(refuge.order$mean,decreasing = TRUE)], ordered=TRUE)
+
+#order by Site_Name
+site.order$Site_Name<-factor(site.order$Site_Name, levels=site.order$Site_Name[order(site.order$RefugeName,decreasing = FALSE)], ordered=TRUE)
+
+site.trend.plot<-ggplot(data=site.order, aes(x=Site_Name, y=mean))+
+  #coord_flip()+
+  geom_bar(stat="identity",aes(fill=mean),alpha=0.9)+
+  geom_errorbar(aes(ymin=mean-SE, ymax=mean+SE, color=mean),width=0, show.legend=FALSE)+
+  geom_hline(yintercept = 0, linetype=2, color=alpha("lightgray",0.8))+
+  scale_color_gradient2(low="tomato",mid="gray60",high="royalblue1")+
+  scale_fill_gradient2(low="tomato",mid="gray60",high="royalblue1", guide_colorbar(title="Trend\n(mm/year)"))+
+  theme(panel.background = element_rect(fill="white"),
+        panel.border=element_rect(fill="transparent",color="black"),
+        axis.text.x=element_text(angle=90,  vjust=0.5, hjust=1),
+        legend.position = c(0.08,0.23),
+        legend.background = element_rect(fill = "white", colour = "transparent"))+
+  #labs(y="Trend (mm/year)", x="Refuge",title="Site-level mean (±SE) trend (mm/year) in change in marsh elevation.", fill="Trend", color=NULL)
+  labs(y="Trend (mm/year)", x="Refuge", color=NULL)
+
+print(site.trend.plot)
+
+```
+
+<br />
+<br />
+
+#### Figure 7. SET Station-level trend (mean $\pm$ SE) in change in marsh elevation (mm/year).
+```{r, fig.width=7, fig.height=6, dpi=150}
+#sort by mean
+station.order<-all.stations[order(c(all.stations$mean),decreasing=TRUE),]
+#order Station levels
+station.order$Plot_Name<-factor(station.order$Plot_Name, levels=rev(unique(as.character(station.order$Plot_Name))))
+#order Station levels
+station.order$Site_Name<-factor(station.order$Site_Name, levels=rev(unique(as.character(station.order$Site_Name))))
+
+#order by Refuge
+station.order$RefugeName<-factor(station.order$RefugeName, levels=unique(as.character(refuge.order$RefugeName)))
+
+#sort by mean
+station.order<-all.stations[order(c(all.stations$mean),decreasing=TRUE),]
+
+#get sorted RefugeName levels
+refuge.order<-all.refuges[order(all.refuges$mean,decreasing=TRUE),]
+refuge.order$RefugeName<-factor(refuge.order$RefugeName, levels=unique(as.character(refuge.order$RefugeName)))
+
+#sort by mean
+station.order<-all.stations[order(all.stations$mean,decreasing=TRUE),]
+
+#site.order$Site_Name<-all.sites[order(all.sites$RefugeName, all.sites$mean,decreasing=FALSE),]
+station.order$RefugeName<- factor(station.order$RefugeName, levels=refuge.order$RefugeName[order(refuge.order$mean,decreasing = TRUE)], ordered=TRUE)
+
+#order by Site_Name
+station.order$Plot_Name<-factor(station.order$Plot_Name, levels=station.order$Plot_Name[order(station.order$RefugeName,decreasing = FALSE)], ordered=TRUE)
+
+station.trend.plot<-ggplot(data=station.order, aes(x=Plot_Name, y=mean))+
+  geom_bar(stat="identity",aes(fill=mean),alpha=0.9)+
+  geom_errorbar(aes(ymin=mean-SE, ymax=mean+SE, color=mean),width=0, show.legend=FALSE)+
+  geom_hline(yintercept = 0, linetype=2, color=alpha("lightgray",0.8))+
+  scale_color_gradient2(low="tomato",mid="gray60",high="royalblue1")+
+  scale_fill_gradient2(low="tomato",mid="gray60",high="royalblue1", guide_colorbar(title="Trend\n(mm/year)"))+
+  theme(panel.background = element_rect(fill="white"),
+        panel.border=element_rect(fill="transparent",color="black"),
+        axis.text.x=element_text(angle=90,  vjust=0.5, hjust=1, size=5),
+        legend.position = c(0.08,0.22),
+        legend.background = element_rect(fill = "white", colour = "transparent"))+
+  #labs(y="Trend (mm/year)", x="SET Station Name",title="Station-level mean (±SE) trend (mm/year) in change in marsh elevation.", fill="Trend", color=NULL)
+  labs(y="Trend (mm/year)", x="SET Station Name", color=NULL)
+
+print(station.trend.plot)
+
+```
+
+
+<br />
+<br />
+
+#### Figure 8. Regional map showing site-level trends.
+```{r, warning=FALSE, message=FALSE, fig.width=10, fig.height=10, dpi=150}
+#Map with study area locations
+
+#get locations of SETs
+SETcoords<-unique(data[, c("RefugeName","Site_Name","Plot_Name","Longitude","Latitude")])
+
+#aggregate to get Site coords
+site.long<-aggregate(Longitude~Site_Name+RefugeName, data=SETcoords, FUN=mean)
+site.lat<-aggregate(Latitude~Site_Name+RefugeName, data=SETcoords, FUN=mean)
+site.coords.merge<-merge(site.long, site.lat, by=c("Site_Name","RefugeName"),all=TRUE)
+
+#merge with site-level means
+site.order.merge<-merge(site.order, site.coords.merge, by=c("Site_Name","RefugeName"),all.x=TRUE)
+
+#add magnitude column with multiple
+site.order.merge$Magnitude<-abs(site.order.merge$mean)
+
+meanLong<-mean(SETcoords$Longitude,na.rm = TRUE)
+meanLat<-mean(SETcoords$Latitude,na.rm=TRUE)
+
+#get basemap
+basemap<-get_map(location=c(meanLong, meanLat),zoom=6, maptype="terrain")
+#ggmap(basemap)
+
+#get map extent
+mapExtent<-attr(basemap, "bb")
+
+trendMapRegion<-ggmap(basemap)+
+  geom_point(data=site.order.merge, aes(x=Longitude, y=Latitude, color=mean), size=6,alpha=0.9, position=position_jitter(width=0.1, height=0.1))+
+  scale_color_gradient2(low="tomato",mid="gray60",high="royalblue1", guide_colorbar(title="Trend (mm/year)"))+
+  labs(x="Longitude",y="Latitude")+
+  theme(
+    axis.text=element_text(size=14),
+    axis.title=element_text(size=16),
+    panel.border=element_rect(fill="transparent", color="black"),
+    #legend.position = "none"
+    legend.position = c(0.8,0.23),
+    legend.key.size = unit(2,"line"),
+    legend.text = element_text(size=12, color="black"),
+    legend.title=element_text(size=14, color="black"),
+    legend.background = element_rect(fill="transparent")
+  )+
+  # geom_label_repel(data=site.coords.merge,aes(x=Longitude,y=Latitude, label=Site_Name), fill="gray30",color="white", show.legend=FALSE, label.padding=0.4, size=6, segment.alpha=0.7, alpha=0.8)+
+  ggsn::scalebar(x.min=mapExtent$ll.lon, x.max=mapExtent$ur.lon, y.min=mapExtent$ll.lat, y.max=mapExtent$ur.lat,transform=TRUE, dist_unit="km",dist=200, st.dist=0.015, height = 0.01,anchor=c(x=-73,y=28),st.color = "white")
+
+trendMapRegion
+
+```
+
+
+#### Figure 9. Station-level summaries showing map of SET stations with trends, and station-level trend plots.
+```{r, message=FALSE, warning=FALSE, dpi=150, results='asis'}
+
+#subchunkify function to produce figures of differing dimmensions within the same r chunk
+subchunkify <- function(g, fig_height=7, fig_width=5) {
+  g_deparsed <- paste0(deparse(
+    function() {g}
+  ), collapse = '')
+  
+  sub_chunk <- paste0("
+  `","``{r sub_chunk_", floor(runif(1) * 10000), ", fig.height=", fig_height, ", fig.width=", fig_width, ", echo=FALSE}",
+  "\n(", 
+    g_deparsed
+    , ")()",
+  "\n`","``
+  ")
+  
+  cat(knitr::knit(text = knitr::knit_expand(text = sub_chunk), quiet = TRUE))
+}
+
+#get site-level means
+siteList<-unique(station.order$Site_Name)
+
+for(i in 1:length(siteList)){
+  
+  #get locations of SETs
+  new.SETcoords<-subset(station.order, Site_Name==siteList[i])
+  
+  #get site name
+  siteName<-as.character(unique(new.SETcoords$Site_Name))
+  
+  #get refugeName
+  refugeName<-as.character(unique(new.SETcoords$RefugeName))
+  
+  #aggregate to get Site coords
+  site.long<-aggregate(Longitude~Site_Name+RefugeName, data=new.SETcoords, FUN=mean)
+  site.lat<-aggregate(Latitude~Site_Name+RefugeName, data=new.SETcoords, FUN=mean)
+  
+  meanLong<-mean(new.SETcoords$Longitude)
+  meanLat<-mean(new.SETcoords$Latitude)
+
+  left.coord=meanLong- (meanLong-min(new.SETcoords$Longitude))
+  bottom.coord=meanLat-(meanLat-min(new.SETcoords$Latitude))
+  right.coord=meanLong+(max(new.SETcoords$Longitude)-meanLong)
+  top.coord=meanLat+(max(new.SETcoords$Latitude)-meanLat)
+  
+  #set zoom 
+  plotZoom=ifelse(siteName=="Harris Neck", 11, 
+                  ifelse(siteName=="Cape Romain - Horsehead Key",14,17))
+
+  #scale location multiple
+  plotScaleAnchorX=ifelse(siteName=="Cape Romain - Horsehead Key",0.99983, 
+                          ifelse(siteName=="Harris Neck",0.998,0.99993))
+  plotScaleAnchorY=ifelse(siteName=="Cape Romain - Horsehead Key",0.99975, 
+                          ifelse(siteName=="Harris Neck",0.99641,0.999935))
+  
+  #scalebarDist
+  scalebarDist=ifelse(siteName=="Harris Neck",5, 0.3)
+  
+  #get basemap
+  #basemap<-get_map(location=c(left=left.coord, bottom=bottom.coord, right=right.coord,top=top.coord),zoom=plotZoom, maptype="terrain")
+  basemap<-get_map(location=c(meanLong, meanLat),zoom=plotZoom, maptype="satellite")
+  #ggmap(basemap)
+  
+  #get map extent
+  mapExtent<-attr(basemap, "bb")
+
+trendMapSite<-ggmap(basemap)+
+  geom_point(data=new.SETcoords, aes(x=Longitude, y=Latitude, color=mean), size=7,alpha=0.9)+
+  scale_color_gradient2(low="tomato",mid="gray60",high="royalblue1",limits=c(min(station.order$mean,na.rm=TRUE),max(station.order$mean, na.rm=TRUE)), guide_colorbar(title="Trend\n(mm/year)"))+
+  #scale_size_binned(range=c(4,30))+
+  labs(x="Longitude",y="Latitude")+
+  theme(
+    axis.text=element_text(size=10),
+    axis.title=element_text(size=12),
+    title=element_text(size=10),
+    panel.border=element_rect(fill="transparent", color="black"),
+    #legend.position = "none"
+    legend.position = c(0.15,0.82),
+    legend.key.size = unit(1,"line"),
+    legend.text = element_text(size=10, color="white"),
+    legend.title=element_text(size=12, color="white"),
+    legend.background = element_rect(fill="transparent")
+  )+
+  geom_label_repel(data=new.SETcoords,aes(x=Longitude,y=Latitude, label=Plot_Name), fill="white",color="black", show.legend=FALSE,point.padding=0.8, label.padding=0.4, size=4, segment.alpha=0.7, alpha=0.8)+
+  ggsn::scalebar(x.min=mapExtent$ll.lon, x.max=mapExtent$ur.lon, y.min=mapExtent$ll.lat, y.max=mapExtent$ur.lat,transform=TRUE, dist_unit="km",dist=scalebarDist, st.dist=0.017, st.size=4,height = 0.01,st.color = "white", anchor=c(x=right.coord*plotScaleAnchorX,y=bottom.coord*plotScaleAnchorY))+
+  ggtitle(paste("SET plots at ", siteName, " site within ",refugeName, " NWR.",sep=""))
+
+#print map
+subchunkify(trendMapSite, 6, 6)
+
+#add blank lines
+cat("\n\n\\")
+
+#make pos.pin a factor
+set.data.merge$pos.pin<-as.factor(set.data.merge$pos.pin)
+
+#make column with colors
+set.data.merge$trendColor<-ifelse(set.data.merge$Sig_Trend=="Positive","royalblue2",
+                                  ifelse(set.data.merge$Sig_Trend=="Negative","tomato","gray20"))
+
+#set factor levels for trendColor
+#set.data.merge$trendColor<-factor(set.data.merge$trendColor, levels=c("Positive"))
+
+plot.data<-subset(set.data.merge, Site_Name==siteName)
+
+#set factor levels of plot.data
+plot.data$Sig_Trend<-factor(plot.data$Sig_Trend, levels=unique(plot.data$Sig_Trend))
+myPlotColors<-unique(plot.data$trendColor)
+
+
+#now plot trends by EventDate
+  SETallDatesPlot_noOutliers_Site<-ggplot(data=plot.data, aes(x=Date, y=value, group=1))+
+    geom_point(color="gray50",alpha=0.7, size=1, shape=16)+
+    #geom_path(aes(color=Plot_Name),alpha=0.2)+
+        geom_smooth(aes(x=Date, y=value, group=pos.pin),method="lm",color="gray80",size=0.4,alpha=0.1,inherit.aes = FALSE, se=FALSE)+
+geom_smooth(aes(color=Sig_Trend, fill=Sig_Trend),method=lm, fullrange=TRUE, linetype=1, se=TRUE,alpha=0.3)+
+    scale_color_manual(values=myPlotColors)+
+    scale_fill_manual(values=myPlotColors)+
+    scale_y_continuous(expand=c(0.1,0.1))+
+    scale_x_date(date_breaks = "2 year",date_labels = "%Y")+
+        theme(panel.background = element_rect(color="black",fill="transparent"),
+          panel.border = element_rect(color="black", fill="transparent"),
+          axis.text.x = element_text(size=10, color="black"),
+          axis.text.y = element_text(size=10, color="black"),
+          axis.title.x = element_text(size=12, hjust=0.5, vjust=1.9),
+          axis.title.y = element_text(angle = 90, vjust=1.2, size=12),
+          title=element_text(size=7),
+          legend.position = "bottom",
+          legend.key.size = unit(1,"line"),
+          legend.text = element_text(size=8),
+          legend.title=element_text(size=10),
+          legend.background = element_rect(fill=alpha("white",0.9), color="black"))+
+    geom_hline(yintercept=0, linetype=2, color="gray30",alpha=0.8)+
+    stat_poly_eq(formula = y~ x,eq.with.lhs = "italic(hat(y))~`=`~",aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), parse = TRUE)+
+    labs(x="Year", y="Relative difference in pin height (mm)", title = paste("Pin-level slopes (light gray lines) and linear model trend (mean ± SE; shown in color, if significant) \n of relative change in marsh elevation mm/year at ", siteName, " site within ",refugeName, " NWR.",sep=""))
+
+#plot Site
+#print(SETallDatesPlot_noOutliers_Site)
+subchunkify(SETallDatesPlot_noOutliers_Site, 4,7)
+
+#add blank lines
+cat("\n\\")
+
+#try facet by SET
+  SETallDatesPlot_noOutliers_Site_facet<-SETallDatesPlot_noOutliers_Site+facet_wrap(~Plot_Name, drop=TRUE)+
+    theme(strip.text=element_text(size=8))
+
+  #print(SETallDatesPlot_noOutliers_Site_facet)
+  subchunkify(SETallDatesPlot_noOutliers_Site_facet, 4,7)
+
+  
+#add blank lines
+cat("\n\n\\")
+cat("\n\n\\")
+
+}
+
+
+```
+
+
+
+
+#### Figure 10. Pin-level regression plots at each SET station (among 4 arm positions)
+```{r, eval=TRUE, fig.height=4, fig.width=7, dpi=150}
+
+#get sorted RefugeName levels
+refuge.order<-all.refuges[order(all.refuges$mean,decreasing=TRUE),]
+
+#subset by refuge
+refugeList<-unique(refuge.order$RefugeName)
+
+for(i in 1:length(refugeList)){
+  refuge.data<-subset(data, RefugeName==refugeList[i])
+
+  siteList<-unique(as.character(refuge.data$Site_Name))
+
+  for(j in 1:length(siteList)){
+    
+    site.data<-subset(refuge.data, Site_Name==siteList[j])
+    
+    #get stationList
+    stationList<-unique(as.character(site.data$Plot_Name))
+    
+    for(k in 1:length(stationList)){
+      
+      plot.data<-subset(site.data, Plot_Name==stationList[k])
+      
+      plot.data$PositionLabels<-paste("Position ", plot.data$PipeDirectionCode,sep="")
+    
+      pin.reg.plot<-ggplot(plot.data, aes(x=Date, y=value))+
+        geom_point(aes(color=variable),size=0.7,alpha=0.5)+
+        geom_smooth(method="lm",aes(color=variable),se=FALSE,alpha=0.4, size=0.5)+
+        scale_x_date(date_breaks="1 year",date_labels = "%b\n%Y", minor_breaks = "1 year")+
+        ylab("Delta Elevation (mm)")+
+        geom_hline(yintercept=0,linetype=2, color="darkgray")+
+        theme(panel.background =element_rect(fill="white"),
+              panel.grid.major=element_line(color=alpha("lightgray",0.4)),
+              panel.border=element_rect(fill="transparent",color="black"),
+              axis.text.x=element_text(size=5))
+      #pin.reg.plot
+
+      #plot of all pin-level linear models
+      pin.reg.plot+facet_wrap(Plot_Name~PositionLabels,ncol=4)+
+        labs(color = "Pin")+
+        ggtitle(paste(refugeList[i],"NWR:", siteList[j],"-","SET",stationList[k], sep=" "))
+
+      pin.reg.facet<-pin.reg.plot+facet_wrap(Plot_Name~PositionLabels,ncol=4)+
+        labs(color = "Pin")+
+        ggtitle(paste(refugeList[i],"NWR:", siteList[j],"-","SET",stationList[k], sep=" "))
+
+      print(pin.reg.facet)
+    
+      }
+    }
+  }
+
+```
+
+
+<br />
+<br />
+
+## References
+<div id="refs"></div>

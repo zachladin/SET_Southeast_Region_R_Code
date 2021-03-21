@@ -5,11 +5,11 @@ runJAGSmodelYear<-function(dataIn, modelIn){
 
   stationName<-as.character(unique(sub.data.2$Plot_Name))
 
-  posList<-sort(unique(as.character(sub.data.2$Position_Name)))
+  posList<-sort(unique(as.character(sub.data.2$PipePosition)))
 
   # for(k in 1:length(posList)){
   #
-  #   sub.data.3<-subset(sub.data.2, Position_Name==posList[k])
+  #   sub.data.3<-subset(sub.data.2, PipePosition==posList[k])
 
   #number of rows of data
   Ndata<-nrow(sub.data.2)
@@ -23,7 +23,7 @@ runJAGSmodelYear<-function(dataIn, modelIn){
   Nvisits<-length(unique(visits))
 
   #number of positions (n=4)
-  pos<-as.integer(factor(sub.data.2[,"Position_Name"], levels=unique(sub.data.2[,"Position_Name"])))
+  pos<-as.integer(factor(sub.data.2[,"PipePosition"], levels=unique(sub.data.2[,"PipePosition"])))
   Npos<-length(unique(pos))
 
   #number of pins per position (n=9)

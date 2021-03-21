@@ -1,21 +1,19 @@
 getSlope<-function(dataIn){
+  
   set.data<-dataIn
-
 
   #create folders
   dir.create(paste(getwd(), "Results","Refuge_Results",sep="/"))
-  dir.create(paste(getwd(), "Results","SMI_unit_Results",sep="/"))
+  dir.create(paste(getwd(), "Results","Site_Results",sep="/"))
   dir.create(paste(getwd(), "Results","Station_Results",sep="/"))
 
   #extract covariates from data
-  dataCovs<-unique(set.data[,c("State","Unit_Code")])
+  dataCovs<-data.frame(unique(set.data[,c("State","RefugeName")]))
 
   ######################################################
   message("Compiling lists from data.")
   #get refugeList
-  #refugeList<-sort(unique(as.character(set.data$Unit_Code)))
-  refugeList<-c("MEC","RHC","PKR","SPT","JHC","OYS","WRT","EBF","BMH","PMH", "PMH_shallow","ESV","BKB")
-
+  refugeList<-sort(unique(as.character(set.data$RefugeName)))
 
   ######################################################
 
@@ -26,60 +24,64 @@ getSlope<-function(dataIn){
   all.stations<-list()
   all.refuges<-list()
   for(j in 1:length(refugeList)){
-    refuge.data<-subset(set.data,Unit_Code==refugeList[j])
+    print(refugeList[j])
+    refuge.data<-subset(set.data,RefugeName==refugeList[j])
 
-    refugeName<-as.character(unique(refuge.data$Unit_Code))
-    #get smiUnitList
-    smiUnitList<-sort(unique(as.character(refuge.data$Site_Name)))
+    refugeName<-as.character(unique(refuge.data$RefugeName))
+    
+    #get siteList
+    siteList<-sort(unique(as.character(refuge.data$Site_Name)))
 
   refuge.pins<-list()
   refuge.positions<-list()
   refuge.stations<-list()
-  for(k in 1:length(smiUnitList)){
+  for(k in 1:length(siteList)){
 
-    smi.data<-subset(refuge.data, Site_Name==smiUnitList[k])
+    site.data<-subset(refuge.data, Site_Name==siteList[k])
+    
+    #add year.visit (may need to play with formatting again)
+    #site.data$year.visit<-paste(site.data$Year, site.data$Visit, sep=".")
 
-    smiUnitName<-as.character(unique(smi.data$Site_Name))
+    siteName<-as.character(unique(site.data$Site_Name))
 
     #get stationList
-    stationList<-sort(unique(as.character(smi.data$Plot_Name)))
+    stationList<-sort(unique(as.character(site.data$Station_Name)))
 
     #get refuge covariates
-    refugeCovs<-unique(smi.data[,c("State","Unit_Code",
-                                    "Site_Name","Plot_Name","Lat","Long")])
+    refugeCovs<-unique(site.data[,c("State","RefugeName",
+                                    "Site_Name","Station_Name","Latitude","Longitude")])
 
-
-  smiUnit.pin.slopes<-list()
-  smiUnit.positions<-list()
-  smiUnit.stations<-list()
+  site.pin.slopes<-list()
+  site.positions<-list()
+  site.stations<-list()
   for(i in 1:length(stationList)){
+    print(stationList[i])
 
-    new.data<-subset(smi.data, Plot_Name==stationList[i])
+    new.data<-subset(site.data, Station_Name==stationList[i])
 
-    refugeName<-as.character(unique(new.data$Unit_Code))
-    smiUnitName<-as.character(unique(new.data$Site_Name))
-    stationName<-as.character(unique(new.data$Plot_Name))
+    refugeName<-as.character(unique(new.data$RefugeName))
+    siteName<-as.character(unique(new.data$Site_Name))
+    stationName<-as.character(unique(new.data$Station_Name))
 
     #get pospinList
     pospinList<-unique(sort(as.character(new.data$pos.pin)))
 
     #get covariates
-    stationCovs<-unique(new.data[,c("State","Unit_Code",
-                                    "Site_Name","Plot_Name","Lat","Long")])
+    stationCovs<-unique(new.data[,c("State","RefugeName","Site_Name","Station_Name","Latitude","Longitude")])
 
-    positionCovs<-unique(new.data[,c("State","Unit_Code","Site_Name","Plot_Name","Position_Name","Lat","Long")])
+    positionCovs<-unique(new.data[,c("State","RefugeName","Site_Name","Station_Name","PipePosition","Latitude","Longitude")])
 
     regResults.out<-list()
     for(k in 1:length(pospinList)){
+      print(pospinList[k])
       sub.data<-subset(new.data, pos.pin==pospinList[k])
       sub.data$value<-as.numeric(sub.data[,"value"])
-      sub.data$Last_Name<-as.factor(as.character(sub.data$Last_Name))
+      sub.data$ReaderFullName<-as.factor(as.character(sub.data$ReaderFullName))
       sub.data$Year<-as.integer(as.factor(sub.data[,"Year"]))
       sub.data$Visit<-as.factor(sub.data[,"Visit"])
       sub.data$year.visit<-as.integer(as.factor(sub.data$year.visit))
 
-        sub.dataCovs<-unique(sub.data[,c("State","Unit_Code",
-                                         "Site_Name","Plot_Name","Position_Name","variable","pos.pin")])
+      sub.dataCovs<-unique(sub.data[,c("State","RefugeName","Site_Name","Station_Name","PipePosition","variable","pos.pin")])
 
         #linear model with Visit nested within Year, and if there is only 1 visit, fit just Year
         mod.1<-tryCatch({
@@ -89,72 +91,114 @@ getSlope<-function(dataIn){
         })
 
         #get slope over years
+        slope<-NULL
         try(slope<-coef(summary(mod.1))[ , "Estimate"][2])
+        intercept<-NULL
         try(intercept<-coef(summary(mod.1))[ , "Estimate"][1])
 
         #combine slope with station covs
-        regResults<-data.frame(sub.dataCovs,slope=slope,intercept=intercept)
+        regResults<-NULL
+        regResults<-tryCatch({
+          data.frame(sub.dataCovs,slope=slope,intercept=intercept)
+        },error=function(cond2){
+          cond2=data.frame(sub.dataCovs,slope=NA,intercept=NA)
+          cond2
+        })
 
         #compile regResults over each pin
         regResults.out<-rbind(regResults.out, regResults)
       }
 
+    # ##########################################################################
+    # 
+    # trend.save<-list()
+    # for(k in 1:length(stationList)){
+    #   
+    #   stationData<-subset(site.data, Station_Name==stationList[1])
+    #   mod<-NULL
+    #   mod<-lm(mean~as.numeric(year.visit), data=stationData)
+    #   slope<-mod$coefficients[2]
+    #   
+    #   summary.mod<-summary(mod)
+    #   
+    #   mod.stats<-as.data.frame(summary.mod$coefficients)
+    #   pVal<-mod.stats$`Pr(>|t|)`[2]
+    #   
+    #   Sig<-ifelse(pVal<0.05, "Significant","Not_significant" )
+    #   
+    #   stationData<-data.frame(stationData, "Slope"=slope, "P_value"=pVal,"Sig"=Sig)
+    #   
+    #   stationData$Trend<-if(stationData$Sig =="Significant" & stationData$Slope>0){
+    #     "Positive"
+    #   }else{
+    #     if(stationData$Sig =="Significant" & stationData$Slope<0){
+    #       "Negative"
+    #     }else{
+    #       "No Trend"
+    #     }
+    #   }
+    #   
+    #   trend.save<-rbind(trend.save, stationData)
+    #   
+    # }
+    # 
+    # 
+    # 
+    # ##########################################################################
+    
      #save station results
      dir.create(paste(getwd(), "Results","Station_Results",refugeName,sep="/"))
-     dir.create(paste(getwd(), "Results","Station_Results",refugeName,smiUnitName,sep="/"))
-     dir.create(paste(getwd(), "Results","Station_Results",refugeName,smiUnitName,stationName,sep="/"))
+     dir.create(paste(getwd(), "Results","Station_Results",refugeName,siteName,sep="/"))
+     dir.create(paste(getwd(), "Results","Station_Results",refugeName,siteName,stationName,sep="/"))
 
 
-     write.csv(regResults.out, file=paste(getwd(), "Results","Station_Results",refugeName,smiUnitName,stationName,paste(stationName,"pin-level","slopes.pins.out.csv",sep="_"),sep="/"),row.names=FALSE)
+     write.csv(regResults.out, file=paste(getwd(), "Results","Station_Results",refugeName,siteName,stationName,paste(stationName,"pin-level","slopes.pins.out.csv",sep="_"),sep="/"),row.names=FALSE)
 
      #get means for each position
-     station.positions<-summaryFunction(dataIn=regResults.out, factor="Position_Name", response="slope")
-     station.positions.out.1<-merge(station.positions, positionCovs, by="Position_Name")
-     station.positions.out<-station.positions.out.1[,c("State","Unit_Code","Site_Name","Plot_Name","Lat","Long",
-                                                   "Position_Name","n","mean","var","SD","SE","CV","lwr","upr")]
+     station.positions<-summaryFunction(dataIn=regResults.out, factor="PipePosition", response="slope")
+     station.positions.out.1<-merge(station.positions, positionCovs, by="PipePosition")
+     station.positions.out<-station.positions.out.1[,c("State","RefugeName","Site_Name","Station_Name","Latitude","Longitude","PipePosition","n","mean","var","SD","SE","CV","lwr","upr")]
 
      #save compiled Position-level slopes
-     write.csv(station.positions.out, file=paste(getwd(),"Results","Station_Results",refugeName,smiUnitName,stationName,paste(stationName,"Position_level_slopes.csv",sep="_"),sep="/"),row.names=FALSE)
+     write.csv(station.positions.out, file=paste(getwd(),"Results","Station_Results",refugeName,siteName,stationName,paste(stationName,"Position_level_slopes.csv",sep="_"),sep="/"),row.names=FALSE)
 
      #get station means
-     station.slopes<-summaryFunction(dataIn=station.positions.out, factor="Plot_Name",response="mean")
-     station.merge.1<-merge(station.slopes, refugeCovs, by="Plot_Name")
-     station.merge<-station.merge.1[,c("State","Unit_Code","Site_Name","Plot_Name","Lat","Long",
-                                       "n","mean","var","SD","SE","CV","lwr","upr")]
+     station.slopes<-summaryFunction(dataIn=station.positions.out, factor="Station_Name",response="mean")
+     station.merge.1<-merge(station.slopes, refugeCovs, by="Station_Name")
+     station.merge<-station.merge.1[,c("State","RefugeName","Site_Name","Station_Name","Latitude","Longitude", "n","mean","var","SD","SE","CV","lwr","upr")]
 
-     write.csv(station.merge, file=paste(getwd(), "Results","Station_Results",refugeName,smiUnitName,stationName,paste(stationName,"Station-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE)
+     write.csv(station.merge, file=paste(getwd(), "Results","Station_Results",refugeName,siteName,stationName,paste(stationName,"Station-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE)
 
 
-     #compile pin-level slopes for each smiUnit
-     smiUnit.pin.slopes<-rbind(smiUnit.pin.slopes,regResults.out)
+     #compile pin-level slopes for each site
+     site.pin.slopes<-rbind(site.pin.slopes,regResults.out)
 
       #compile position means
-      smiUnit.positions<-rbind(smiUnit.positions,station.positions.out)
+      site.positions<-rbind(site.positions,station.positions.out)
 
       #compile station means
-      smiUnit.stations<-rbind(smiUnit.stations, station.merge)
-
+      site.stations<-rbind(site.stations, station.merge)
    }
 
   message("Saving output to .csv file.")
-  dir.create(paste(getwd(), "Results","SMI_unit_Results",refugeName,sep="/"))
-  dir.create(paste(getwd(), "Results","SMI_unit_Results",refugeName,smiUnitName,sep="/"))
+  dir.create(paste(getwd(), "Results","Site_Results",refugeName,sep="/"))
+  dir.create(paste(getwd(), "Results","Site_Results",refugeName, siteName,sep="/"))
 
-  write.csv(smiUnit.pin.slopes, file=paste(getwd(), "Results","SMI_unit_Results",refugeName,smiUnitName, paste(smiUnitName,"pin-level","slopes.pins.out.csv",sep="_"),sep="/"),row.names=FALSE)
+  write.csv(site.pin.slopes, file=paste(getwd(), "Results","Site_Results",refugeName,siteName, paste(siteName,"pin-level","slopes.pins.out.csv",sep="_"),sep="/"),row.names=FALSE)
 
-  write.csv(smiUnit.positions, file=paste(getwd(), "Results","SMI_unit_Results",refugeName,smiUnitName, paste(smiUnitName,"position","slopes.pins.out.csv",sep="_"),sep="/"),row.names=FALSE)
+  write.csv(site.positions, file=paste(getwd(), "Results","Site_Results",refugeName,siteName, paste(siteName,"position","slopes.pins.out.csv",sep="_"),sep="/"),row.names=FALSE)
 
   #compile results for each refuge
 
   dir.create(paste(getwd(),"Results","Refuge_Results",refugeName,sep="/"))
 
-  refuge.pins<-rbind(refuge.pins,smiUnit.pin.slopes)
+  refuge.pins<-rbind(refuge.pins,site.pin.slopes)
   write.csv(refuge.pins, file=paste(getwd(), "Results","Refuge_Results",refugeName,paste(refugeName,"Pin-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE)
 
-  refuge.positions<-rbind(refuge.positions,smiUnit.positions)
+  refuge.positions<-rbind(refuge.positions,site.positions)
   write.csv(refuge.positions, file=paste(getwd(), "Results","Refuge_Results",refugeName,paste(refugeName,"Position-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE)
 
-  refuge.stations<-rbind(refuge.stations, smiUnit.stations)
+  refuge.stations<-rbind(refuge.stations, site.stations)
   write.csv(refuge.stations, file=paste(getwd(), "Results","Refuge_Results",refugeName,paste(refugeName,"Station-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE)
 
   makePlot<-function(dataIn){
@@ -167,20 +211,20 @@ getSlope<-function(dataIn){
     minSET<-round(min(plot.refuge.data$mean, na.rm=TRUE)-10,0)
     maxSET<-round(max(plot.refuge.data$mean, na.rm=TRUE)+10,0)
 
-    plot.refuge.data$Plot_Name<-as.factor(as.character(plot.refuge.data$Plot_Name))
+    plot.refuge.data$Station_Name<-as.factor(as.character(plot.refuge.data$Station_Name))
 
-    #make sure SET stations are in correct order (by SMI_Unit)
-    plot.refuge.data$Plot_Name <- factor(plot.refuge.data$Plot_Name, levels =plot.refuge.data$Plot_Name )
+    #make sure SET stations are in correct order (by Site)
+    plot.refuge.data$Station_Name <- factor(plot.refuge.data$Station_Name, levels =plot.refuge.data$Station_Name )
 
     plot1<-NULL
 
     plot1<-ggplot(data=plot.refuge.data)+
       coord_flip()+
-      aes(x=Plot_Name, y=mean, ymin=mean-SE, ymax=mean+SE,group=Site_Name)+
+      aes(x=Station_Name, y=mean, ymin=mean-SE, ymax=mean+SE,group=Site_Name)+
 
       geom_hline(yintercept=0,lty=2,color="darkgray")+
       geom_bar(stat="identity", position=position_dodge(),aes(fill=Site_Name),size=2,alpha=0.9)+
-      geom_errorbar(width=0.1, size=0.5, position=position_dodge(width=0.95),aes(color=Site_Name))+
+      geom_errorbar(width=0, size=0.5, position=position_dodge(width=0.95),aes(color=Site_Name))+
       # scale_fill_manual(values=c("darkorange2","royalblue4","palegreen3"),guide=guide_legend(title=""))+
       # scale_color_manual(values=c("darkorange2","royalblue4","palegreen3"),guide=guide_legend(title=""))+
       theme(panel.background=element_rect(fill='white',color="black"))+
@@ -193,7 +237,7 @@ getSlope<-function(dataIn){
             axis.title.y = element_text(angle = 90, vjust=1.2, size=13))+
       ylim(minSET,maxSET)+
       labs(x="SET station",y="Change in SET height (mm/year)")+
-      scale_x_discrete(limits = rev(levels(plot.refuge.data$Plot_Name)))+
+      scale_x_discrete(limits = rev(levels(plot.refuge.data$Station_Name)))+
       scale_fill_discrete(guide_legend(title="SMI Unit"))+
       guides(color=FALSE)+
       ggtitle(paste("Frequentist-estimated mean and SE for change in\nmarsh elevation height (mm/year) at" ,refugeName))
@@ -205,9 +249,9 @@ getSlope<-function(dataIn){
 
 
   #get refuge-level means
-  refuge.slopes<-summaryFunction(dataIn=refuge.stations, factor="Unit_Code",response="mean")
-  refuge.merge.1<-merge(refuge.slopes, dataCovs, by="Unit_Code")
-  refuge.merge<-refuge.merge.1[,c("State","Unit_Code", "n","mean","var","SD","SE","CV","lwr","upr")]
+  refuge.slopes<-summaryFunction(dataIn=refuge.stations, factor="RefugeName",response="mean")
+  refuge.merge.1<-merge(refuge.slopes, dataCovs, by="RefugeName")
+  refuge.merge<-refuge.merge.1[,c("State","RefugeName", "n","mean","var","SD","SE","CV","lwr","upr")]
   write.csv(refuge.merge, file=paste(getwd(), "Results","Refuge_Results",refugeName,paste(refugeName,"Refuge-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE)
 
   }
@@ -218,8 +262,6 @@ getSlope<-function(dataIn){
 
   #run makePlot function
   try(plot1<-makePlot(dataIn=refuge.stations))
-
-
 
   #compile all results
   all.pins<-rbind(all.pins, refuge.pins)

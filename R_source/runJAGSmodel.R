@@ -5,7 +5,7 @@ runJAGSmodel<-function(dataIn, modelIn){
 
   stationName<-as.character(unique(new.data$Plot_Name))
 
-  posList<-sort(unique(as.character(new.data$Position_Name)))
+  posList<-sort(unique(as.character(new.data$PipePosition)))
 
   #number of year.visits within of data
   Ndata<-nrow(new.data)
@@ -23,7 +23,7 @@ runJAGSmodel<-function(dataIn, modelIn){
   Nvisits<-length(unique(visit))
 
   #number of positions (n=4)
-  pos<-as.integer(factor(new.data[,"Position_Name"], levels=unique(new.data[,"Position_Name"])))
+  pos<-as.integer(factor(new.data[,"PipePosition"], levels=unique(new.data[,"PipePosition"])))
   Npos<-length(unique(pos))
 
   #number of pins per position (n=9)
@@ -35,7 +35,7 @@ runJAGSmodel<-function(dataIn, modelIn){
   Npos.pins<-length(unique(pos.pins))
 
   #observer
-  obs<-as.integer( factor( new.data[,"Last_Name"] ,levels=unique(new.data[,"Last_Name"])))
+  obs<-as.integer( factor( new.data[,"ReaderFullName"] ,levels=unique(new.data[,"ReaderFullName"])))
   #head(new.data)
 
   #try with year.visit
@@ -104,7 +104,7 @@ runJAGSmodel<-function(dataIn, modelIn){
   jagsModel=NULL
 
   #get sum of y
-  sum.y<-sum(dataList$y)
+  sum.y<-sum(dataList$y, na.rm=TRUE)
 
 ifelse(sum.y==0,
        jagsModel<-NULL,

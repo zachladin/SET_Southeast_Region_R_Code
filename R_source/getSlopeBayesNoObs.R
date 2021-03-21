@@ -5,17 +5,17 @@ getSlopeBayesNoObs<-function(dataIn){
   dir.create(paste(getwd(), "Results","Results_Bayes",sep="/"))
 
   dir.create(paste(getwd(), "Results","Results_Bayes","Refuge_Results",sep="/"))
-  dir.create(paste(getwd(), "Results","Results_Bayes","SMI_unit_Results",sep="/"))
+  dir.create(paste(getwd(), "Results","Results_Bayes","Site_Results",sep="/"))
   dir.create(paste(getwd(), "Results", "Results_Bayes","Station_Results",sep="/"))
 
   #extract covariates
-  dataCovs<-unique(set.data[,c("State","Unit_Code")])
+  dataCovs<-unique(set.data[,c("State","RefugeName")])
 
   ######################################################
   message("Compiling lists from data.")
 
   #get refugeList
-  refugeList<-sort(as.character(unique(set.data$Unit_Code)))
+  refugeList<-sort(as.character(unique(set.data$RefugeName)))
   
   ######################################################
 
@@ -26,49 +26,53 @@ getSlopeBayesNoObs<-function(dataIn){
   all.stations<-list()
   all.refuges<-list()
   for(j in 1:length(refugeList)){
-    refuge.data<-subset(set.data,Unit_Code==refugeList[j])
+    refuge.data<-subset(set.data,RefugeName==refugeList[j])
 
-    refugeName<-as.character(unique(refuge.data$Unit_Code))
+    refugeName<-as.character(unique(refuge.data$RefugeName))
     print(refugeName)
-
-    #get smiUnitList
-    smiUnitList<-sort(unique(as.character(refuge.data$Site_Name)))
-    print(smiUnitList)
+    
+    #get siteList
+    siteList<-sort(unique(as.character(refuge.data$Site_Name)))
+    print(siteList)
 
     refuge.pins<-list()
     refuge.positions<-list()
     refuge.stations<-list()
-    for(k in 1:length(smiUnitList)){
+    for(k in 1:length(siteList)){
 
-      smi.data<-subset(refuge.data, Site_Name==smiUnitList[k])
+      site.data<-subset(refuge.data, Site_Name==siteList[k])
+      
+      #get n (number of unique SET per site)
+      n.siteSET<-length(unique(site.data$Plot_Name))
 
-      smiUnitName<-as.character(unique(smi.data$Site_Name))
-      print(smiUnitName)
+      siteName<-as.character(unique(site.data$Site_Name))
+      print(siteName)
 
       #get stationList
-      stationList<-sort(unique(as.character(smi.data$Plot_Name)))
+      stationList<-sort(unique(as.character(site.data$Plot_Name)))
       print(stationList)
+      
 
       #get refuge covariates
-      refugeCovs<-unique(smi.data[,c("State","Unit_Code",
-                                     "Site_Name","Plot_Name","Lat","Long")])
+      refugeCovs<-unique(site.data[,c("State","RefugeName",
+                                     "Site_Name","Plot_Name","Latitude","Longitude")])
 
 
-      smiUnit.pin.slopes<-list()
-      smiUnit.positions<-list()
-      smiUnit.stations<-list()
+      site.pin.slopes<-list()
+      site.positions<-list()
+      site.stations<-list()
       for(i in 1:length(stationList)){
 
-        new.data<-subset(smi.data, Plot_Name==stationList[i])
+        new.data<-subset(site.data, Plot_Name==stationList[i])
 
-        refugeName<-as.character(unique(new.data$Unit_Code))
-        smiUnitName<-as.character(unique(new.data$Site_Name))
+        refugeName<-as.character(unique(new.data$RefugeName))
+        siteName<-as.character(unique(new.data$Site_Name))
         stationName<-as.character(unique(new.data$Plot_Name))
 
         print(stationName)
 
         #get positionList
-        positionList<-unique(sort(as.character(new.data$Position_Name)))
+        positionList<-unique(sort(as.character(new.data$PipePosition)))
         print(positionList)
 
         #get pospinList
@@ -76,12 +80,12 @@ getSlopeBayesNoObs<-function(dataIn){
         print(pospinList)
 
         #get covariates
-        stationCovs<-unique(new.data[,c("State","Unit_Code",
-                                        "Site_Name","Plot_Name","Lat","Long")])
+        stationCovs<-unique(new.data[,c("State","RefugeName",
+                                        "Site_Name","Plot_Name","Latitude","Longitude")])
 
-        positionCovs<-unique(new.data[,c("State","Unit_Code","Site_Name","Plot_Name","Position_Name","Lat","Long")])
+        positionCovs<-unique(new.data[,c("State","RefugeName","Site_Name","Plot_Name","PipePosition","Latitude","Longitude")])
 
-        pos.pinCovs<-unique(new.data[,c("State","Unit_Code","Site_Name","Plot_Name","Position_Name","variable","pos.pin","Lat","Long")])
+        pos.pinCovs<-unique(new.data[,c("State","RefugeName","Site_Name","Plot_Name","PipePosition","variable","pos.pin","Latitude","Longitude")])
 
         #runJAGSmodel function
         out<-tryCatch({runJAGSmodel(dataIn=new.data, modelIn="modelNoObs.txt")
@@ -92,26 +96,27 @@ getSlopeBayesNoObs<-function(dataIn){
         head(out)
         #save station results
         dir.create(paste(getwd(), "Results","Results_Bayes","Station_Results",refugeName,sep="/"))
-        dir.create(paste(getwd(), "Results","Results_Bayes","Station_Results",refugeName,smiUnitName,sep="/"))
-        dir.create(paste(getwd(), "Results","Results_Bayes","Station_Results",refugeName,smiUnitName,stationName,sep="/"))
+        dir.create(paste(getwd(), "Results","Results_Bayes","Station_Results",refugeName,siteName,sep="/"))
+        dir.create(paste(getwd(), "Results","Results_Bayes","Station_Results",refugeName,siteName,stationName,sep="/"))
 
         #save MCMC output
-        try(dput(out,file=paste(getwd(), "Results","Results_Bayes","Station_Results",refugeName,smiUnitName,stationName,paste(stationName,"Bayes.mcmc.output.Obs.R",sep="."), sep="/")))
+        try(dput(out,file=paste(getwd(), "Results","Results_Bayes","Station_Results",refugeName,siteName,stationName,paste(stationName,"Bayes.mcmc.output.Obs.R",sep="."), sep="/")))
 
         message("Compiling JAGS MCMC output, and getting posterior summary statistics.")
 
         #get summary of output
-        new.bayes<-tryCatch({summary(window(out,start=11001))
+        new.bayes<-tryCatch({
+          summary(window(out,start=11001))
         },error=function(cond2){
           cond2=data.frame(Mean=NA, SD=NA, Naive.SE=NA, Time.series.SE=NA)
         })
 
         try(new.bayes.means<-as.data.frame(new.bayes$statistics))
         try(new.bayes.quantiles<-as.data.frame(new.bayes$quantiles))
-        try(new.bayes.out<-data.frame(new.bayes.means, new.bayes.quantiles))
+        try(new.bayes.out<-data.frame(n=n.siteSET, new.bayes.means, new.bayes.quantiles))
 
         #save summary of mcmc chains
-        try(dput(new.bayes.out,file=paste(getwd(), "Results","Results_Bayes","Station_Results",refugeName,smiUnitName,stationName,paste(stationName,"Bayes.summary.output.Obs.R",sep="."), sep="/")))
+        try(dput(new.bayes.out,file=paste(getwd(), "Results","Results_Bayes","Station_Results",refugeName,siteName,stationName,paste(stationName,"Bayes.summary.output.Obs.R",sep="."), sep="/")))
 
         #get summary of intercepts (b0)
         try(pos.pin.intercepts<-new.bayes$statistics[1:36,])
@@ -155,55 +160,55 @@ getSlopeBayesNoObs<-function(dataIn){
         try(station.mean<-new.bayes$statistics[89,])
 
         station.out<-NULL
-        try(station.out<-data.frame(stationCovs, t(station.mean)))
+        try(station.out<-data.frame(stationCovs, n=n.siteSET,t(station.mean)))
 
         ifelse(is.null(station.out)==TRUE,
-               station.out.2<-data.frame(stationCovs, Mean=NA, SD=NA, Naive.SE=NA,Time.series.SE=NA),
+               station.out.2<-data.frame(stationCovs,n=n.siteSET, Mean=NA, SD=NA, Naive.SE=NA,Time.series.SE=NA),
                station.out.2<-data.frame(station.out)
         )
 
         #save station results
-        try(write.csv(pos.pin.out.2, file=paste(getwd(), "Results","Results_Bayes","Station_Results",refugeName,smiUnitName,stationName,paste(stationName,"Bayes_Pin-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE))
+        try(write.csv(pos.pin.out.2, file=paste(getwd(), "Results","Results_Bayes","Station_Results",refugeName,siteName,stationName,paste(stationName,"Bayes_Pin-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE))
 
 
         #save compiled Position-level slopes
-        try(write.csv(position.out.2, file=paste(getwd(),"Results","Results_Bayes","Station_Results",refugeName,smiUnitName,stationName,paste(stationName,"Bayes_Position-level_slopes.csv",sep="_"),sep="/"),row.names=FALSE))
+        try(write.csv(position.out.2, file=paste(getwd(),"Results","Results_Bayes","Station_Results",refugeName,siteName,stationName,paste(stationName,"Bayes_Position-level_slopes.csv",sep="_"),sep="/"),row.names=FALSE))
 
-        try(write.csv(station.out.2, file=paste(getwd(), "Results","Results_Bayes","Station_Results",refugeName,smiUnitName,stationName,paste(stationName,"Bayes_Station-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE))
+        try(write.csv(station.out.2, file=paste(getwd(), "Results","Results_Bayes","Station_Results",refugeName,siteName,stationName,paste(stationName,"Bayes_Station-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE))
 
 
-        #compile pin-level slopes for each smiUnit
-        try(smiUnit.pin.slopes<-rbind(smiUnit.pin.slopes,pos.pin.out.2))
+        #compile pin-level slopes for each site
+        try(site.pin.slopes<-rbind(site.pin.slopes,pos.pin.out.2))
 
         #compile position means
-        try(smiUnit.positions<-rbind(smiUnit.positions,position.out.2))
+        try(site.positions<-rbind(site.positions,position.out.2))
 
         #compile station means
-        try( smiUnit.stations<-rbind(smiUnit.stations, station.out.2))
+        try( site.stations<-rbind(site.stations, station.out.2))
 
       }
 
       message("Saving output to .csv file.")
 
-      dir.create(paste(getwd(), "Results","Results_Bayes","SMI_unit_Results",refugeName,sep="/"))
-      dir.create(paste(getwd(), "Results","Results_Bayes","SMI_unit_Results",refugeName,smiUnitName,sep="/"))
+      dir.create(paste(getwd(), "Results","Results_Bayes","Site_Results",refugeName,sep="/"))
+      dir.create(paste(getwd(), "Results","Results_Bayes","Site_Results",refugeName,siteName,sep="/"))
 
-      try(write.csv(smiUnit.pin.slopes, file=paste(getwd(), "Results","Results_Bayes","SMI_unit_Results",refugeName,smiUnitName, paste(smiUnitName,"Bayes_Pin-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE))
+      try(write.csv(site.pin.slopes, file=paste(getwd(), "Results","Results_Bayes","Site_Results",refugeName,siteName, paste(siteName,"Bayes_Pin-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE))
 
-      try(write.csv(smiUnit.positions, file=paste(getwd(), "Results","Results_Bayes","SMI_unit_Results",refugeName,smiUnitName, paste(smiUnitName,"Bayes_Position-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE))
+      try(write.csv(site.positions, file=paste(getwd(), "Results","Results_Bayes","Site_Results",refugeName,siteName, paste(siteName,"Bayes_Position-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE))
 
       #compile results for each refuge
 
       dir.create(paste(getwd(),"Results","Results_Bayes","Refuge_Results",refugeName,sep="/"))
 
-      try(refuge.pins<-rbind(refuge.pins,smiUnit.pin.slopes))
+      try(refuge.pins<-rbind(refuge.pins,site.pin.slopes))
       try(write.csv(refuge.pins, file=paste(getwd(), "Results","Results_Bayes","Refuge_Results",refugeName,paste(refugeName,"Bayes_Pin-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE))
 
-      try(refuge.positions<-rbind(refuge.positions,smiUnit.positions))
+      try(refuge.positions<-rbind(refuge.positions,site.positions))
       try(write.csv(refuge.positions, file=paste(getwd(), "Results","Results_Bayes","Refuge_Results",refugeName,paste(refugeName,"Bayes_Position-level_slopes.csv",sep="_"),sep="/"),row.names=FALSE))
 
 
-      try(refuge.stations<-rbind(refuge.stations, smiUnit.stations))
+      try(refuge.stations<-rbind(refuge.stations, site.stations))
       try(write.csv(refuge.stations, file=paste(getwd(), "Results","Results_Bayes","Refuge_Results",refugeName,paste(refugeName,"Bayes_Station-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE))
 
       ########################################
@@ -222,7 +227,7 @@ getSlopeBayesNoObs<-function(dataIn){
 
         plot.refuge.data$Plot_Name<-as.factor(as.character(plot.refuge.data$Plot_Name))
 
-        #make sure SET stations are in correct order (by SMI_Unit)
+        #make sure SET stations are in correct order (by Site)
         plot.refuge.data$Plot_Name <- factor(plot.refuge.data$Plot_Name, levels =plot.refuge.data$Plot_Name )
 
         plot1<-ggplot(data=plot.refuge.data)+
@@ -245,7 +250,7 @@ getSlopeBayesNoObs<-function(dataIn){
           ylim(minSET,maxSET)+
           labs(x="SET station",y="Change in SET height (mm/year)")+
           scale_x_discrete(limits = rev(levels(plot.refuge.data$Plot_Name)))+
-          scale_fill_discrete(guide_legend(title="SMI Unit"))+
+          scale_fill_discrete(guide_legend(title="Site"))+
           guides(color=FALSE)+
           ggtitle(paste("Bayesian-estimated mean and SE for change in\nmarsh elevation height (mm/year) at" ,refugeName))
 
@@ -256,9 +261,9 @@ getSlopeBayesNoObs<-function(dataIn){
       }
 
       #get refuge-level means
-      try(refuge.slopes<-summaryFunction(dataIn=refuge.stations, factor="Unit_Code",response="Mean"))
-      try(refuge.merge.1<-merge(refuge.slopes, dataCovs, by="Unit_Code"))
-      try(refuge.merge<-refuge.merge.1[,c("State","Unit_Code", "n","mean","var","SD","SE","CV","lwr","upr")])
+      try(refuge.slopes<-summaryFunction(dataIn=refuge.stations, factor="RefugeName",response="Mean"))
+      try(refuge.merge.1<-merge(refuge.slopes, dataCovs, by="RefugeName"))
+      try(refuge.merge<-refuge.merge.1[,c("State","RefugeName", "n","mean","var","SD","SE","CV","lwr","upr")])
       try(write.csv(refuge.merge, file=paste(getwd(), "Results","Results_Bayes","Refuge_Results",refugeName,paste(refugeName,"Bayes_Refuge-level","slopes.csv",sep="_"),sep="/"),row.names=FALSE))
 
     }

@@ -14,11 +14,11 @@ obsEffect<-function(dataIn_1, dataIn_2){
   #merge slopes and slopes.obs
   slopes.obs.out.merge<-merge(new.slopes, new.slopes.obs, by="Plot_Name")
 
-  slopes.obs.out<-slopes.obs.out.merge[,c("State.x","Unit_Code.x","Site_Name.x","Plot_Name","Lat.x","Long.x",
+  slopes.obs.out<-slopes.obs.out.merge[,c("State.x","RefugeName.x","Site_Name.x","Plot_Name","Latitude.x","Longitude.x",
                                           "n.x","mean.x","var.x","SD.x","SE.x","CV.x","lwr.x","upr.x",
                                           "n.y","mean.y","var.y","SD.y","SE.y","CV.y","lwr.y","upr.y")]
 
-  colnames(slopes.obs.out)<-c("State","Unit_Code","Site_Name","Plot_Name","Lat","Long",
+  colnames(slopes.obs.out)<-c("State","RefugeName","Site_Name","Plot_Name","Latitude","Longitude",
                               "n","mean","var","SD","SE","CV","lwr","upr",
                               "n.obs","mean.obs","var.obs","SD.obs","SE.obs","CV.obs","lwr.obs","upr.obs")
 
@@ -45,23 +45,22 @@ obsEffect<-function(dataIn_1, dataIn_2){
   #########################################################################
   #plot SET rates to visualize observer effects
 
-  #refugeList<-sort(unique(as.character(slopes.obs.out$Unit_Code)))
+  refugeList<-sort(unique(as.character(slopes.obs.out$RefugeName)))
   #hard code list ordered by Latitude
-  refugeList<-c("MEC","RHC","PKR","SPT","JHC","OYS","WRT","EBF","BMH","PMH", "ESV","BKB")
 
   #stack data
   slopes.freq.2<-rbind(new.slopes, new.slopes.obs)
 
   message("Generating and saving change in marsh elevation rate plots.")
   for(i in 1:length(refugeList)){
-    sub.slope<-subset(slopes.freq.2, Unit_Code==refugeList[i])
+    sub.slope<-subset(slopes.freq.2, RefugeName==refugeList[i])
 
     #sort data by DiffObs for plotting
     sub.slope<-sub.slope[order(sub.slope$mean),]
 
-    sub.slope$Plot_Name <- factor(sub.slope$Plot_Name, levels = sub.slope$Plot_Name[order(sub.slope$mean)])
+    sub.slope$Plot_Name <- factor(sub.slope$Plot_Name, levels = unique(sub.slope$Plot_Name[order(sub.slope$mean)]))
 
-    refugeName<-as.character(unique(sub.slope$Unit_Code))
+    refugeName<-as.character(unique(sub.slope$RefugeName))
 
     minSET<-round(min(sub.slope$mean, na.rm=TRUE)-10,0)
     maxSET<-round(max(sub.slope$mean, na.rm=TRUE)+10,0)
@@ -108,14 +107,14 @@ obsEffect<-function(dataIn_1, dataIn_2){
 
   message("Generating and saving plots.")
   for(i in 1:length(refugeList)){
-    sub.slope<-subset(slopes.freq,Unit_Code==refugeList[i])
+    sub.slope<-subset(slopes.freq,RefugeName==refugeList[i])
 
     #sort data by DiffObs for plotting
     sub.slope<-sub.slope[order(sub.slope$DiffObs),]
 
-    sub.slope$Plot_Name <- factor(sub.slope$Plot_Name, levels = sub.slope$Plot_Name[order(sub.slope$DiffObs)])
+    sub.slope$Plot_Name <- factor(sub.slope$Plot_Name, levels = unique(sub.slope$Plot_Name[order(sub.slope$DiffObs)]))
 
-    refugeName<-unique(as.character(sub.slope$Unit_Code))
+    refugeName<-unique(as.character(sub.slope$RefugeName))
 
     diffPlot1<-ggplot(data=sub.slope)+
       coord_flip()+

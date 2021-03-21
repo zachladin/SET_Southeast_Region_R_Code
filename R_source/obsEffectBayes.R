@@ -2,11 +2,11 @@
 obsEffectBayes<-function(dataIn_1, dataIn_2){
 
   new.slopes<-dataIn_1
-  new.slopes$Model<-"No_Observer"
+  #new.slopes$Model<-"No_Observer"
 
 
   new.slopes.obs<-dataIn_2
-  new.slopes.obs$Model<-"Observer"
+  #new.slopes.obs$Model<-"Observer"
 
   #########################################################################
   #add slopes.obs mean variance estimates
@@ -14,11 +14,12 @@ obsEffectBayes<-function(dataIn_1, dataIn_2){
   #merge slopes and slopes.obs
   slopes.obs.out.merge<-merge(new.slopes, new.slopes.obs, by="Plot_Name")
 
-  slopes.obs.out<-slopes.obs.out.merge[,c("State.x","Unit_Code.x","Site_Name.x","Plot_Name","Lat.x","Long.x",
-                                          "Mean.x","SD.x","Naive.SE.x","Time.series.SE.x","Model.x",
+  slopes.obs.out<-slopes.obs.out.merge[,c("State.x","RefugeName.x","Site_Name.x","Plot_Name","Latitude.x","Longitude.x",
+                                          "n.x","Mean.x","SD.x","Naive.SE.x","Time.series.SE.x","Model.x",
                                           "Mean.y","SD.y","Naive.SE.y","Time.series.SE.y","Model.y")]
+  
 
-  colnames(slopes.obs.out)<-c("State","Unit_Code","Site_Name","Plot_Name","Lat","Long",
+  colnames(slopes.obs.out)<-c("State","RefugeName","Site_Name","Plot_Name","Latitude","Longitude","n",
                               "Mean","SD","Naive.SE","Time.series.SE","Model",
                               "Mean.obs","SD.obs","Naive.SE.obs","Time.series.SE.obs","Model.obs")
 
@@ -44,23 +45,24 @@ obsEffectBayes<-function(dataIn_1, dataIn_2){
   #########################################################################
   #plot SET rates to visualize observer effects
 
-  #refugeList<-sort(unique(as.character(slopes.obs.out$Unit_Code)))
+  #refugeList<-sort(unique(as.character(slopes.obs.out$RefugeName)))
   #hard code list ordered by Latitude
-  refugeList<-c("MEC","RHC","PKR","SPT","JHC","OYS","WRT","EBF","BMH","PMH", "PMH_shallow","ESV","BKB")
+  refugeList<-sort(unique(as.character(slopes.obs.out$RefugeName)))
+
 
   #stack data
   slopes.freq.2<-rbind(new.slopes, new.slopes.obs)
 
   message("Generating and saving change in marsh elevation rate plots.")
   for(i in 1:length(refugeList)){
-    sub.slope<-subset(slopes.freq.2, Unit_Code==refugeList[i])
+    sub.slope<-subset(slopes.freq.2, RefugeName==refugeList[i])
 
     #sort data by DiffObs for plotting
     sub.slope<-sub.slope[order(sub.slope$Mean),]
 
-    sub.slope$Plot_Name <- factor(sub.slope$Plot_Name, levels = sub.slope$Plot_Name[order(sub.slope$Mean)])
+    sub.slope$Plot_Name <- factor(sub.slope$Plot_Name, levels = unique(sub.slope$Plot_Name[order(sub.slope$Mean)]))
 
-    refugeName<-as.character(unique(sub.slope$Unit_Code))
+    refugeName<-as.character(unique(sub.slope$RefugeName))
 
     minSET<-round(min(sub.slope$Mean, na.rm=TRUE)-10,0)
     maxSET<-round(max(sub.slope$Mean, na.rm=TRUE)+10,0)
@@ -108,14 +110,14 @@ obsEffectBayes<-function(dataIn_1, dataIn_2){
 
   message("Generating and saving plots.")
   for(i in 1:length(refugeList)){
-    sub.slope<-subset(slopes.freq,Unit_Code==refugeList[i])
+    sub.slope<-subset(slopes.freq,RefugeName==refugeList[i])
 
     #sort data by DiffObs for plotting
     sub.slope<-sub.slope[order(sub.slope$DiffObs),]
 
-    sub.slope$Plot_Name <- factor(sub.slope$Plot_Name, levels = sub.slope$Plot_Name[order(sub.slope$DiffObs)])
+    sub.slope$Plot_Name <- factor(sub.slope$Plot_Name, levels = unique(sub.slope$Plot_Name[order(sub.slope$DiffObs)]))
 
-    refugeName<-unique(sub.slope$Unit_Code)
+    refugeName<-unique(sub.slope$RefugeName)
 
     diffPlot1<-ggplot(data=sub.slope)+
       coord_flip()+

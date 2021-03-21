@@ -1,9 +1,12 @@
-#Format SET data function SETformat
-formatSETdata<-function(dataIn){
+#Format SET data function SETformat for Region 4
+formatSETdataR4<-function(dataIn){
 
   message("Reading raw data in.")
   new.data<-dataIn
 
+  
+  #look at data
+  head(new.data)
   
   
   
@@ -24,8 +27,12 @@ formatSETdata<-function(dataIn){
   data.1<-subset(new.data, Start_Date != "")
   data.1<-na.omit(data.1)
 
-  #Remove double observers (all where Contact_Order==2)
-  data.1<-subset(data.1, Contact_Order==1)
+  #Remove double observers (all where Contact_Order==2) add Contact_Order as column or if there is no Contact_Orer==2, set it all to 1
+  #data.1<-subset(data.1, Contact_Order==1)
+  data.1$Contact_Order <- 1
+  
+  #change SiteName to Site_Name coliumn header
+  names(data.1)[names(data.1)=="SiteName"]<-"Site_Name"
 
   #Add Year, Month, and Day columns to data.
   message("Adding year, month, and day columns to data.")
@@ -133,7 +140,7 @@ formatSETdata<-function(dataIn){
   #Use package 'reshape' to reorganize data (like Pivot table in Excel) using melt().
   message("Computing elevation change (mm) for SET data.")
   #melt function .
-    data.melt<-melt(data.out.keep, id=c("Plot_Name","Last_Name",
+    data.melt<-reshape2::melt(data.out.keep, id=c("Plot_Name","Last_Name",
                                  "Year","Position_Name","Visit","year.visit"),
                     measure=c("Pin1","Pin2","Pin3","Pin4","Pin5","Pin6","Pin7",
                               "Pin8","Pin9"))
@@ -287,7 +294,7 @@ new.data.out.2<-merge(new.data.out.1, Region.lookup, by="Unit_Code",all.x=TRUE)
                             "station.position.year","station.year","year.visit","Long","Lat",
                             "Pin1","Pin2","Pin3","Pin4","Pin5","Pin6","Pin7","Pin8","Pin9")
   #Melt data to stack all Pins (Pin1, Pin2, . . .) in one column.
-  delta.set.melt<-melt(set.delta.data, id=c("State","RefugeName","Unit_Code","Site_Name","Plot_Name","Year","Day","Last_Name","Position_Name","Visit",
+  delta.set.melt<-reshape2::melt(set.delta.data, id=c("State","RefugeName","Unit_Code","Site_Name","Plot_Name","Year","Day","Last_Name","Position_Name","Visit",
                                           "station.position.year","station.year","year.visit","Long","Lat"),
                      measure=c("Pin1","Pin2","Pin3","Pin4","Pin5","Pin6","Pin7","Pin8","Pin9"))
 
